@@ -1,12 +1,52 @@
-# 拾帧
+<p align="center">
+  <img src="docs/images/social-preview.png" alt="拾帧——Android 公开媒体提取与本地转换工具" width="100%">
+</p>
 
-一个使用 Kotlin、Jetpack Compose 和 Material 3 编写的 Android 学习项目。它面向用户有权保存、无需登录且没有 DRM 的公开媒体；不提供 Cookie 导入、账号登录、付费绕过、DRM 绕过或访问控制规避能力。
+<h1 align="center">拾帧</h1>
 
-> 请只处理你拥有版权、已获授权或平台明确允许保存的内容。平台服务条款可能限制下载行为，使用者需自行确认并遵守。
+<p align="center">面向公开媒体与本地文件的 Android 提取、下载和格式转换工具</p>
+
+<p align="center">
+  <a href="https://github.com/fuu-start/Shizhen/actions/workflows/android.yml"><img src="https://github.com/fuu-start/Shizhen/actions/workflows/android.yml/badge.svg" alt="Android CI"></a>
+  <a href="https://github.com/fuu-start/Shizhen/releases/latest"><img src="https://img.shields.io/github/v/release/fuu-start/Shizhen?display_name=tag&sort=semver" alt="最新版本"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/fuu-start/Shizhen" alt="GPL-3.0 许可证"></a>
+  <img src="https://img.shields.io/badge/Android-8.0%2B-C65A1E" alt="Android 8.0 及以上">
+</p>
+
+<p align="center">
+  <strong><a href="https://github.com/fuu-start/Shizhen/releases/latest">下载最新版 APK</a></strong>
+  · <a href="#快速开始">安装与使用</a>
+  · <a href="KNOWN_LIMITATIONS.md">已知限制</a>
+  · <a href="https://github.com/fuu-start/Shizhen/issues">反馈问题</a>
+</p>
+
+拾帧使用 Kotlin、Jetpack Compose 和 Material 3 构建。它可以从分享文字中识别公开媒体链接，预览并下载可访问的视频、图片和音频，也能在手机本地完成视频转 GIF、GIF 转 MP4 和视频抽帧。
+
+> [!IMPORTANT]
+> 请只处理你拥有版权、已获授权或平台明确允许保存的内容。拾帧不提供 Cookie 导入、账号登录、付费绕过、DRM 绕过或访问控制规避能力。平台服务条款可能限制下载行为，使用者需自行确认并遵守。
+
+## 功能亮点
+
+- 从整段分享文字中提取 URL，并识别国内外常见公开媒体平台。
+- 合并同一资源的不同清晰度，支持预览、后台下载、进度显示、打开和分享。
+- 区分完整音频与“仅试听片段”，不把封面、预览或水印资源伪装成完整内容。
+- 使用内置 FFmpeg 在本地完成视频转 GIF、GIF 转 MP4 和视频抽帧，不上传用户文件。
+- 使用 Room 保存操作历史，并通过诊断中心导出经过脱敏的解析、下载和转换日志。
+- Material 3 暖秋色界面，支持深色模式、系统分享接收和 Android 存储访问框架。
+
+## 快速开始
+
+1. 打开 [最新 Release](https://github.com/fuu-start/Shizhen/releases/latest)，下载文件名包含 `arm64-v8a` 的 APK。
+2. 在 Android 8.0 或更高版本的 64 位手机上允许“安装未知应用”，然后打开 APK 安装。
+3. 从浏览器或其他 App 分享公开链接到“拾帧”，或直接粘贴分享文字；应用不会在未经确认时自动解析或下载。
+4. 平台页面结构和网络出口会影响解析结果。失败时请在“历史记录 → 诊断中心”导出报告，并通过 [Issue 模板](https://github.com/fuu-start/Shizhen/issues/new/choose) 反馈。
 
 ## 当前状态
 
 当前正式版为 `1.0.8 (22)`。项目已在本仓库实际执行 `testDebugUnitTest`、`lintDebug` 和 `assembleDebug`；126 个 JVM 单元测试全部通过，Lint 为 0 errors。生成的 APK 仅包含 `arm64-v8a`，适用于主流 64 位 Android 手机，最低 Android 8.0（API 26）。
+
+<details>
+<summary><strong>展开查看完整实现清单</strong></summary>
 
 已完成：
 
@@ -50,6 +90,8 @@
 - 视频转 GIF 和 GIF 转 MP4 均包含兼容模式重试；系统文件选择器返回通用 MIME 类型时，会结合扩展名识别 MP4、MKV、WebM、MOV、AVI、3GP、TS 和 GIF。
 - 转换进度、取消、参数校验、空间检查、可读错误信息和应用异常退出后的中断历史标记。
 - 应用内诊断中心：轮转保存解析器选择、候选格式筛选、yt-dlp 下载输出、预览失败代码、FFmpeg 命令/退出码和最近输出；支持复制、分享和清空报告。
+
+</details>
 
 更详细的边界请阅读 [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md)，测试记录和真机清单见 [TESTING.md](TESTING.md)。
 
@@ -120,6 +162,19 @@ Debug APK 输出：
 ```text
 app/build/outputs/apk/debug/app-debug.apk
 ```
+
+### 正式签名构建
+
+仓库不会包含发布密钥。维护者可在项目根目录创建已被 `.gitignore` 排除的 `keystore.properties`：
+
+```properties
+storeFile=/absolute/path/to/release-keystore.jks
+storePassword=your-store-password
+keyAlias=your-key-alias
+keyPassword=your-key-password
+```
+
+随后执行 `./gradlew assembleRelease`。存在完整签名配置时会生成已签名 APK；没有该文件时，开源检出仍可正常执行 Debug 构建。密钥、密码和 `keystore.properties` 不得提交到版本控制。
 
 ## 真机使用
 

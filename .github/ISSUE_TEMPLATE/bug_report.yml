@@ -1,0 +1,84 @@
+name: 问题报告
+description: 报告解析、预览、下载、转换或界面异常
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。请只提交无需登录即可复现的公开链接，并先确认问题在最新 Release 中仍然存在。
+        诊断报告会自动脱敏，但提交前仍建议检查其中是否包含你不希望公开的信息。
+  - type: input
+    id: version
+    attributes:
+      label: 拾帧版本
+      description: 可在系统应用信息或 Release 页面查看。
+      placeholder: 例如 1.0.8 (22)
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: 设备与 Android 版本
+      placeholder: 例如 Pixel 8，Android 15，arm64-v8a
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 问题类型
+      options:
+        - 链接识别或解析
+        - 媒体预览
+        - 文件下载
+        - 视频转 GIF
+        - GIF 转 MP4
+        - 视频提取图片
+        - 历史记录或诊断中心
+        - 安装、启动或界面
+        - 其他
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: 相关平台或文件格式
+      placeholder: 例如 YouTube、抖音、MP4、GIF
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 请说明从打开应用到问题出现的完整操作。
+      placeholder: |
+        1. 粘贴……
+        2. 点击……
+        3. 出现……
+    validations:
+      required: true
+  - type: textarea
+    id: public_link
+    attributes:
+      label: 可公开复现的链接
+      description: 可选。不要提交私人内容、Cookie、Token、账号信息、付费内容或需要登录的链接。
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: 诊断报告
+      description: 在“历史记录 → 诊断中心”刷新后，将 TXT 文件拖入此处上传。无法提供时请说明原因。
+    validations:
+      required: true
+  - type: textarea
+    id: additional
+    attributes:
+      label: 截图或补充信息
+      description: 请先遮挡个人信息；不要上传无权公开的媒体内容。
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交确认
+      options:
+        - label: 我已使用最新 Release，并确认没有提交密码、Cookie、Token 或私人媒体。
+          required: true
+        - label: 我有权公开所提供的链接、截图和诊断信息。
+          required: true

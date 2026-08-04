@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 使用讨论与经验分享
+    url: https://github.com/fuu-start/Shizhen/discussions
+    about: 非缺陷问题、使用经验和平台状态交流请优先使用 Discussions。
