@@ -3,11 +3,14 @@
 .kotlin/
 .idea/
 local.properties
+keystore.properties
 build/
 captures/
 .externalNativeBuild/
 .cxx/
 app/build/
+release-output/
+docs/images/social-preview-source.png
 *.apk
 *.aab
 *.jks
