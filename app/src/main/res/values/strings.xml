@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">拾帧</string>
+    <string name="brand_tagline">拾取精彩，转换随心</string>
+    <string name="nav_extractor">链接提取</string>
+    <string name="nav_converter">格式转换</string>
+    <string name="nav_history">历史记录</string>
+    <string name="extractor_title">公开媒体提取</string>
+    <string name="extractor_subtitle">粘贴公开分享链接，提取其中的视频、图片和音频</string>
+    <string name="extractor_input_label">粘贴或输入分享文字</string>
+    <string name="extractor_input_placeholder">例如：复制这段文字 https://example.com/video 查看作品</string>
+    <string name="parse_link">解析链接</string>
+    <string name="clear">清空</string>
+    <string name="results_empty_title">还没有解析结果</string>
+    <string name="results_empty_body">输入公开链接并点击“解析链接”，媒体资源会显示在这里。</string>
+    <string name="converter_title">本地格式转换</string>
+    <string name="converter_subtitle">文件只在本机处理，不会上传到服务器</string>
+    <string name="choose_media">选择本地媒体</string>
+    <string name="no_file_selected">尚未选择文件</string>
+    <string name="history_title">任务历史</string>
+    <string name="history_subtitle">解析、下载和转换记录会保存在本机</string>
+    <string name="clear_all">清空全部</string>
+    <string name="history_empty_title">暂无历史记录</string>
+    <string name="history_empty_body">完成解析、下载或转换后，结果会显示在这里。</string>
+    <string name="rights_notice">仅处理无需登录、无 DRM 且你有权保存的公开内容。</string>
+</resources>
