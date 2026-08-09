@@ -97,6 +97,7 @@ class MediaDownloadWorker(
                 )
                 DownloadStrategy.DIRECT_AUDIO -> downloadDirectAudio(
                     url = mediaUrl,
+                    sourceUrl = sourceUrl,
                     title = title,
                     itemId = itemId,
                 )
@@ -272,6 +273,7 @@ class MediaDownloadWorker(
 
     private suspend fun downloadDirectAudio(
         url: String,
+        sourceUrl: String? = null,
         title: String?,
         itemId: String,
     ): OutputDestination {
@@ -285,6 +287,15 @@ class MediaDownloadWorker(
                 Request.Builder()
                     .url(url)
                     .header("User-Agent", BROWSER_USER_AGENT)
+                    .apply {
+                        sourceUrl?.takeIf { source ->
+                            runCatching {
+                                val uri = URI(source)
+                                (uri.scheme == "https" || uri.scheme == "http") &&
+                                    !uri.host.isNullOrBlank()
+                            }.getOrDefault(false)
+                        }?.let { header("Referer", it) }
+                    }
                     .get()
                     .build(),
             ).execute()

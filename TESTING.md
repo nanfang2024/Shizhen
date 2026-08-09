@@ -69,7 +69,7 @@ app/schemas/com.example.mediaextractor.data.database.MediaExtractorDatabase/1.js
 - [x] 页面正文使用系统 `SansSerif`；只在诊断日志正文中保留等宽系统字体。
 - [x] 关键浅/深色文字组合按 WCAG 公式检查：主要正文 14.89:1 / 15.48:1，次要正文 6.45:1 / 8.96:1，浅色主按钮白字 4.70:1，均达到 AA。
 - [x] Launcher 源照片只存在于 `drawable-nodpi` 与多密度 `mipmap` 图标链路；系统启动画面使用 Launcher Icon，Compose 品牌开屏只使用 Canvas 抽象枫叶。
-- [x] Adaptive Icon、legacy 方形/圆形图标、arm64 ABI、minSdk 26、targetSdk 34、版本 `1.0.8 (22)` 和 v2 Debug 签名已通过构建工具检查。
+- [x] Adaptive Icon、legacy 方形/圆形图标、arm64 ABI、minSdk 26、targetSdk 34、版本 `1.0.9 (23)` 和 v2 Debug 签名已通过构建工具检查。
 - [ ] 由于本机没有连接 Android 设备，浅色/深色、最大字体、小屏、圆形/圆角方形 OEM 图标蒙版和真实触控体验仍需真机确认。
 
 ## 已验证的构建内容
@@ -81,11 +81,12 @@ app/schemas/com.example.mediaextractor.data.database.MediaExtractorDatabase/1.js
 - APK 包含 yt-dlp/Python 运行组件和真实的 30,043,032 字节 `libffmpeg.so`；不再包含旧 `libffmpeg.zip.so`、`libffprobe.so` 或手工 `libc++_shared.so`。ELF 检查显示新 FFmpeg 是 AArch64 `ET_EXEC` 静态可执行文件且没有动态 `DT_NEEDED` 项。
 - Manifest 包含 `ACTION_SEND` / `text/plain`、FileProvider 和 WorkManager dataSync 前台服务声明。
 - 未声明 `READ_EXTERNAL_STORAGE`、`WRITE_EXTERNAL_STORAGE` 或 `MANAGE_EXTERNAL_STORAGE`。
-- 最终 APK 版本为 `1.0.8 (22)`，大小为 55,827,422 字节（53.24 MiB）；SHA-256 为 `7B0D5690CF1045D72B905624C77135856568CA06E2822F7C1FB40AEB53C86743`。
+- 最终 APK 版本为 `1.0.9 (23)`，大小为 55,828,590 字节（53.24 MiB）；SHA-256 为 `5446869BB42B470DAB46F3BC30E6CC7B32E031C1E153849C5DFF5557199FE35F`。
 
 ## 本机公开源验证
 
 - 诊断报告中的抖音短链 `https://v.douyin.com/zerVNUZphAE/` 可展开到公开作品页 `7553576846722403594`，页面 `_ROUTER_DATA` 中的视频作品尺寸字段为 3840×2160、时长约 60 秒，但只暴露 `playwm` 播放入口。
+- 对本次诊断链接 `https://v.douyin.com/nq40cdYBL38/` 复现：将媒体直链自身误作 Referer 时 CDN 返回 403；使用解析得到的 `iesdouyin.com/share/video/...` 作品页作为 Referer 时，同一 `/aweme/v1/play/` 地址返回 HTTP 206 `video/mp4`。单元测试同时验证视频、封面和图文资源均保存最终作品页作为下载来源。
 - 对同一公开视频 ID 实际请求并下载后，用桌面 FFprobe/FFmpeg 检查：`/playwm/?ratio=720p` 为 H.264 1280×720、31,702,124 字节且抽帧可见平台水印；`/play/?ratio=720p` 为 H.264/AAC 1280×720、31,410,041 字节且同时间抽帧没有平台水印。
 - 这一验证只证明该公开链接在 2026-07-30 的网络响应；平台可随时调整接口。应用因此显示实际公开 720p，不使用页面 4K 元数据虚报下载质量。
 - 对诊断报告中的小红书短链 `http://xhslink.cn/o/4D9F2CmqTur` 执行真实联网冒烟测试：Android 等价逻辑先升级 HTTPS、展开到当前 `discovery/item`，新结构化解析器成功只取得当前笔记图片，没有混入相关笔记或评论图片。

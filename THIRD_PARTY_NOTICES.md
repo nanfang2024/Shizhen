@@ -40,3 +40,7 @@
 该 `libffmpeg.so` 是 AArch64 `ET_EXEC` 静态可执行文件。构建产物的 ELF 动态段为空，不需要旧 `youtubedl-android:ffmpeg:0.18.1` 包中缺失的 `libexpat.so.1`，也不再单独打包 LLVM `libc++_shared.so`。
 
 Apache-2.0、MIT、BSD、PSF、Unlicense 和 EPL 测试依赖均仅以与 GPL-3.0 兼容的方式使用。各组件的完整许可证与版权信息请以上游仓库和 Maven 发布产物为准。
+
+## Windows x64 客户端
+
+Windows 客户端使用 .NET / WPF 8.0.29（MIT）、Microsoft.Data.Sqlite 8.0.20（MIT）、SQLite（Public Domain）、yt-dlp 2026.06.09（Unlicense 及官方 EXE 内列出的第三方许可）、Deno 2.8.1（MIT）和 Gyan FFmpeg 8.1 full build。该 FFmpeg 构建启用了 `--enable-gpl --enable-version3`、libx264 等 GPL 组件，因此 Windows 发布包继续按 GPL-3.0-compatible 方式整体分发。版本、校验方式、二进制许可证和图标例外说明见 [desktop-windows/THIRD_PARTY_NOTICES.md](desktop-windows/THIRD_PARTY_NOTICES.md)。

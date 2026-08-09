@@ -57,6 +57,9 @@ class DouyinRouterDataExtractorTest {
         assertTrue(result.items.all { it.type == MediaType.IMAGE })
         assertTrue(result.items.all { it.sourceWatermark == SourceWatermark.PUBLIC_ORIGINAL })
         assertTrue(result.items.all { it.width == 2559 })
+        assertTrue(result.items.all {
+            it.downloadSourceUrl == "https://www.iesdouyin.com/share/video/123/"
+        })
         assertFalse(result.items.any { it.mediaUrl.contains("-water") })
         assertFalse(result.items.any { it.type == MediaType.AUDIO })
     }
@@ -116,7 +119,12 @@ class DouyinRouterDataExtractorTest {
         assertTrue(video.mediaUrl.contains("ratio=720p"))
         assertFalse(video.mediaUrl.contains("playwm"))
         assertFalse(video.mediaUrl.contains("watermark="))
+        assertEquals("https://www.iesdouyin.com/share/video/456/", video.downloadSourceUrl)
         assertEquals(MediaType.COVER, result.items.last().type)
+        assertEquals(
+            "https://www.iesdouyin.com/share/video/456/",
+            result.items.last().downloadSourceUrl,
+        )
     }
 
     @Test

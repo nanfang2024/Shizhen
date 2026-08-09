@@ -14,7 +14,7 @@ body:
     attributes:
       label: 拾帧版本
       description: 可在系统应用信息或 Release 页面查看。
-      placeholder: 例如 1.0.8 (22)
+      placeholder: 例如 1.0.9 (23)
     validations:
       required: true
   - type: input

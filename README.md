@@ -4,23 +4,25 @@
 
 <h1 align="center">拾帧</h1>
 
-<p align="center">面向公开媒体与本地文件的 Android 提取、下载和格式转换工具</p>
+<p align="center">面向公开媒体与本地文件的 Android / Windows 提取、下载和格式转换工具</p>
 
 <p align="center">
   <a href="https://github.com/fuu-start/Shizhen/actions/workflows/android.yml"><img src="https://github.com/fuu-start/Shizhen/actions/workflows/android.yml/badge.svg" alt="Android CI"></a>
   <a href="https://github.com/fuu-start/Shizhen/releases/latest"><img src="https://img.shields.io/github/v/release/fuu-start/Shizhen?display_name=tag&sort=semver" alt="最新版本"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/fuu-start/Shizhen" alt="GPL-3.0 许可证"></a>
   <img src="https://img.shields.io/badge/Android-8.0%2B-C65A1E" alt="Android 8.0 及以上">
+  <img src="https://img.shields.io/badge/Windows-x64-138FD3" alt="Windows x64">
 </p>
 
 <p align="center">
-  <strong><a href="https://github.com/fuu-start/Shizhen/releases/latest">下载最新版 APK</a></strong>
+  <strong><a href="https://github.com/fuu-start/Shizhen/releases/latest">下载 Android / Windows 最新版</a></strong>
+  · <a href="desktop-windows/README.md">Windows 版</a>
   · <a href="#快速开始">安装与使用</a>
   · <a href="KNOWN_LIMITATIONS.md">已知限制</a>
   · <a href="https://github.com/fuu-start/Shizhen/issues">反馈问题</a>
 </p>
 
-拾帧使用 Kotlin、Jetpack Compose 和 Material 3 构建。它可以从分享文字中识别公开媒体链接，预览并下载可访问的视频、图片和音频，也能在手机本地完成视频转 GIF、GIF 转 MP4 和视频抽帧。
+拾帧 Android 版使用 Kotlin、Jetpack Compose 和 Material 3 构建；Windows x64 版使用 WPF 和 .NET 8 构建。两端都可以从分享文字中识别公开媒体链接，预览并下载可访问的视频、图片和音频，也能在本机完成视频转 GIF、GIF 转 MP4 和视频抽帧。
 
 > [!IMPORTANT]
 > 请只处理你拥有版权、已获授权或平台明确允许保存的内容。拾帧不提供 Cookie 导入、账号登录、付费绕过、DRM 绕过或访问控制规避能力。平台服务条款可能限制下载行为，使用者需自行确认并遵守。
@@ -36,14 +38,16 @@
 
 ## 快速开始
 
-1. 打开 [最新 Release](https://github.com/fuu-start/Shizhen/releases/latest)，下载文件名包含 `arm64-v8a` 的 APK。
-2. 在 Android 8.0 或更高版本的 64 位手机上允许“安装未知应用”，然后打开 APK 安装。
-3. 从浏览器或其他 App 分享公开链接到“拾帧”，或直接粘贴分享文字；应用不会在未经确认时自动解析或下载。
-4. 平台页面结构和网络出口会影响解析结果。失败时请在“历史记录 → 诊断中心”导出报告，并通过 [Issue 模板](https://github.com/fuu-start/Shizhen/issues/new/choose) 反馈。
+打开 [最新 Release](https://github.com/fuu-start/Shizhen/releases/latest)，按设备选择安装包：
+
+- Android 8.0+ 的 64 位 ARM 手机：下载文件名包含 `arm64-v8a` 的 APK，允许“安装未知应用”后打开安装。
+- Windows 10/11 x64：下载 `Shizhen-Windows-x64-*.zip`，完整解压后运行 `install.ps1`，或直接运行便携版 `Shizhen.exe`。详细步骤见 [Windows 版安装、使用与构建说明](desktop-windows/README.md)。
+
+从浏览器或其他 App 分享公开链接到“拾帧”，或直接粘贴分享文字；应用不会在未经确认时自动解析或下载。平台页面结构和网络出口会影响解析结果，失败时请从诊断中心导出报告，并通过 [Issue 模板](https://github.com/fuu-start/Shizhen/issues/new/choose) 反馈。
 
 ## 当前状态
 
-当前正式版为 `1.0.8 (22)`。项目已在本仓库实际执行 `testDebugUnitTest`、`lintDebug` 和 `assembleDebug`；126 个 JVM 单元测试全部通过，Lint 为 0 errors。生成的 APK 仅包含 `arm64-v8a`，适用于主流 64 位 Android 手机，最低 Android 8.0（API 26）。
+当前版本为 Android `1.0.9 (23)`、Windows x64 `1.0.7`。Android 已执行 `testDebugUnitTest`、`lintDebug` 和 `assembleDebug`，126 个 JVM 单元测试全部通过且 Lint 为 0 errors；Windows 已通过 15 项本地/FFmpeg 集成测试、24 项联网解析与真实下载测试以及 Release 冒烟启动。Android APK 仅包含 `arm64-v8a`，最低 Android 8.0（API 26）；Windows 发布包面向 Windows 10/11 x64，并自带所需的 .NET 运行时与媒体工具。
 
 <details>
 <summary><strong>展开查看完整实现清单</strong></summary>
@@ -72,7 +76,7 @@
 - 西瓜分享参数落地页若在部分蜂窝网络/VPN 下返回 HTTP 500，解析器会移除不稳定查询参数，依次尝试 `www.iesdouyin.com/xg/video`、`m.ixigua.com/xg/video`、`m.ixigua.com/video` 与 `m.ixigua.com/dx` 的当前作品公开页，并用移动/桌面请求头和对应官方 Referer 回退；不会因此把相关推荐混入结果。
 - 平台识别覆盖 Instagram、Facebook、YouTube、X/Twitter、TikTok、Vimeo，以及豆包、抖音、快手、小红书、哔哩哔哩、微博、西瓜视频、AcFun、优酷、爱奇艺、芒果 TV、腾讯视频、好看视频、今日头条、梨视频、秒拍、美拍、搜狐、QQ 音乐、网易云音乐、酷狗、酷我、咪咕、网易视频和知乎。具有正式提取器的平台优先走专用解析器或 yt-dlp，其余使用受限的官方公开网页兜底，不能保证每个平台的每种链接都成功。
 - 抖音图文帖优先读取页面公开的 `_ROUTER_DATA`：返回全部图片而不是把背景音乐误报为主资源，并排除 `download_url_list` 中路径明确含 `water` 的地址；短链在需要交给 yt-dlp 时先由 Android 网络栈展开。
-- 抖音公开视频页若只返回 `/playwm/`，应用使用同一公开视频 ID 的 `/play/` 入口并固定请求公开 720p 源；界面明确区分“公开无水印播放源”和“公开原始源”，不会把页面作品尺寸冒充为实际下载分辨率。
+- 抖音公开视频页若只返回 `/playwm/`，应用使用同一公开视频 ID 的 `/play/` 入口并固定请求公开 720p 源；下载时保留短链展开后的 `iesdouyin.com` 作品页作为 Referer，避免播放入口跳转到 CDN 后返回 403。界面明确区分“公开无水印播放源”和“公开原始源”，不会把页面作品尺寸冒充为实际下载分辨率。
 - 解析视频、图片、GIF、封面、音频、标题、作者、清晰度、格式和可获得的文件大小。
 - 图片/GIF 逐项预览、视频/音频流预览，以及推荐质量、音轨、编码和水印边界提示。
 - 解析结果能确认视频包含音轨时，在资源列表末尾增加独立“音频”项和“下载音频”按钮：yt-dlp 来源选择最佳公开音轨并输出 M4A，公开视频直链则下载后使用本地 FFmpeg 提取音轨；无声视频和无音轨 GIF 不显示无效选项。

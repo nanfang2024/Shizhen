@@ -21,3 +21,8 @@ docs/images/social-preview-source.png
 .env
 .env.*
 media_extractor_diagnostics_*.txt
+desktop-windows/**/bin/
+desktop-windows/**/obj/
+desktop-windows/artifacts/
+desktop-windows/Shizhen.Windows/Tools/*.exe
+desktop-windows/Shizhen.Windows/Assets/app-icon-source.jpg

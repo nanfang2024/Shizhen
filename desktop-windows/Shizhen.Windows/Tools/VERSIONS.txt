@@ -1,0 +1,3 @@
+﻿yt-dlp=2026.08.04.234419 sha256=e78500d301b5de3a9280a418f6dd45604c4d85b718b0a2447c1b0aa9699e2689
+deno=2.8.1 sha256=5fb5bac71f609fb91ec8960fb290885aadc27eeb22f07a8eca0c3db6be38b11a
+ffmpeg version 8.1-full_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers

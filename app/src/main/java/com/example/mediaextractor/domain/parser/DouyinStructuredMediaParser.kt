@@ -214,9 +214,13 @@ internal object DouyinRouterDataExtractor {
         val title = item.path("desc").asText().trim().ifBlank { null }
         val author = item.path("author").path("nickname").asText().trim().ifBlank { null }
         val imageItems = item.path("images").mapIndexedNotNull { index, image ->
-            image.toImageItem(awemeId, index)
+            image.toImageItem(awemeId, index, finalUrl)
         }
-        val videoItems = if (imageItems.isEmpty()) item.toVideoItems(awemeId) else emptyList()
+        val videoItems = if (imageItems.isEmpty()) {
+            item.toVideoItems(awemeId, finalUrl)
+        } else {
+            emptyList()
+        }
         val items = imageItems.ifEmpty { videoItems }
         if (items.isEmpty()) return null
         return ParsedMedia(
@@ -230,7 +234,7 @@ internal object DouyinRouterDataExtractor {
         )
     }
 
-    private fun JsonNode.toImageItem(awemeId: String, index: Int): MediaItem? {
+    private fun JsonNode.toImageItem(awemeId: String, index: Int, pageUrl: String): MediaItem? {
         // url_list is the public display source. download_url_list is intentionally ignored:
         // Douyin currently labels those paths with "-water" for this kind of image post.
         val mediaUrl = path("url_list").asSequence()
@@ -255,6 +259,7 @@ internal object DouyinRouterDataExtractor {
                 "页面最高公开尺寸",
             ).joinToString(" · "),
             previewUrl = mediaUrl,
+            downloadSourceUrl = pageUrl,
             isRecommended = index == 0,
             sourceWatermark = SourceWatermark.PUBLIC_ORIGINAL,
             watermarkNote =
@@ -271,7 +276,7 @@ internal object DouyinRouterDataExtractor {
             }
     }
 
-    private fun JsonNode.toVideoItems(awemeId: String): List<MediaItem> {
+    private fun JsonNode.toVideoItems(awemeId: String, pageUrl: String): List<MediaItem> {
         val video = path("video")
         val sourceWidth = video.path("width").asInt().takeIf { it > 0 }
         val sourceHeight = video.path("height").asInt().takeIf { it > 0 }
@@ -314,6 +319,7 @@ internal object DouyinRouterDataExtractor {
                 qualityLabel = listOfNotNull(resolution, candidate.label, "公开无水印播放源")
                     .distinct().joinToString(" · "),
                 previewUrl = candidate.url,
+                downloadSourceUrl = pageUrl,
                 isRecommended = index == 0,
                 hasAudio = true,
                 sourceWatermark = SourceWatermark.PUBLIC_CLEAN,
@@ -327,7 +333,7 @@ internal object DouyinRouterDataExtractor {
         }
         if (videos.isEmpty()) return emptyList()
 
-        val cover = video.path("cover").toCoverItem(awemeId)
+        val cover = video.path("cover").toCoverItem(awemeId, pageUrl)
         return videos + listOfNotNull(cover)
     }
 
@@ -375,7 +381,7 @@ internal object DouyinRouterDataExtractor {
         )
     }
 
-    private fun JsonNode.toCoverItem(awemeId: String): MediaItem? {
+    private fun JsonNode.toCoverItem(awemeId: String, pageUrl: String): MediaItem? {
         val url = firstPublicUrl() ?: return null
         val width = path("width").asInt().takeIf { it > 0 }
         val height = path("height").asInt().takeIf { it > 0 }
@@ -394,6 +400,7 @@ internal object DouyinRouterDataExtractor {
                 "页面封面",
             ).joinToString(" · "),
             previewUrl = url,
+            downloadSourceUrl = pageUrl,
             sourceWatermark = SourceWatermark.UNKNOWN,
             watermarkNote = "这是页面公开封面缩略图，不是视频画面原始文件。",
         )
