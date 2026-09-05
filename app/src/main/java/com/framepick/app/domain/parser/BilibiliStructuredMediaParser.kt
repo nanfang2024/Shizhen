@@ -466,13 +466,13 @@ internal object BilibiliStateExtractor {
         val quality = data.path("quality").asInt().takeIf { it > 0 } ?: return emptyList()
         val label = qualityLabel(quality)
         val totalSegments = data.path("durl").size()
-        return data.path("durl").asSequence().mapIndexed { segmentIndex, segment ->
-            val url = segment.path("url").asText().toPublicUrl() ?: return@mapIndexed null
+        return data.path("durl").asSequence().mapIndexedNotNull { segmentIndex, segment ->
+            val url = segment.path("url").asText().toPublicUrl() ?: return@mapIndexedNotNull null
             val backupUrl = segment.path("backup_url").asSequence()
                 .map(JsonNode::asText)
-                .map(String::toPublicUrl)
+                .map { it.toPublicUrl() }
                 .firstOrNull()
-            val segmentSuffix = if (totalSegments > 1) " · 第${segmentIndex + 1}/$totalSegments段" else ""
+            val segmentSuffix = if (totalSegments > 1) " · 第${segmentIndex + 1}/${totalSegments}段" else ""
             MediaItem(
                 id = stableId("bilibili:$videoPageUrl:$quality:$url"),
                 type = MediaType.VIDEO,
