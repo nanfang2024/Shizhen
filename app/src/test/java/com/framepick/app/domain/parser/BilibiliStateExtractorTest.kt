@@ -291,11 +291,12 @@ class BilibiliStateExtractorTest {
         assertEquals("720P 高清 · 匿名公开档位 · 第2/2段", multi[1].qualityLabel)
         assertEquals(pageUrl, multi[0].downloadSourceUrl)
 
-        assertNull(
+        assertEquals(
+            0,
             BilibiliStateExtractor.buildQualityItems(
                 pageUrl,
                 """{"code":-404,"data":{"durl":[]}}""",
-            ),
+            ).size,
         )
     }
 
