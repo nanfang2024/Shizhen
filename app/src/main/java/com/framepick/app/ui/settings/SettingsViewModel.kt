@@ -3,7 +3,6 @@ package com.framepick.app.ui.settings
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.framepick.app.FramePickApplication
 import com.framepick.app.util.DiagnosticLogger
 import java.io.File
 import kotlinx.coroutines.Dispatchers
@@ -20,16 +19,18 @@ data class SettingsUiState(
 )
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
-    private val diagnostics = MutableStateFlow(SettingsUiState())
-    val uiState: StateFlow<SettingsUiState> = diagnostics.asStateFlow()
+    private val _uiState = MutableStateFlow(SettingsUiState())
+    val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
     fun refreshDiagnostics() {
-        diagnostics.value = diagnostics.value.copy(loading = true, error = null)
+        _uiState.value = _uiState.value.copy(diagnosticsLoading = true, diagnosticsError = null)
         viewModelScope.launch(Dispatchers.IO) {
             runCatching(DiagnosticLogger::buildReport)
-                .onSuccess { diagnostics.value = SettingsUiState(diagnosticText = it) }
+                .onSuccess { _uiState.value = SettingsUiState(diagnosticText = it) }
                 .onFailure {
-                    diagnostics.value = SettingsUiState(error = it.message ?: "无法读取诊断日志。")
+                    _uiState.value = SettingsUiState(
+                        diagnosticsError = it.message ?: "无法读取诊断日志。",
+                    )
                 }
         }
     }
@@ -37,10 +38,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun clearDiagnostics() {
         viewModelScope.launch(Dispatchers.IO) {
             runCatching(DiagnosticLogger::clear)
-                .onSuccess { diagnostics.value = SettingsUiState(diagnosticText = DiagnosticLogger.buildReport()) }
+                .onSuccess {
+                    _uiState.value = SettingsUiState(diagnosticText = DiagnosticLogger.buildReport())
+                }
                 .onFailure {
-                    diagnostics.value = diagnostics.value.copy(
-                        error = it.message ?: "无法清空诊断日志。",
+                    _uiState.value = _uiState.value.copy(
+                        diagnosticsError = it.message ?: "无法清空诊断日志。",
                     )
                 }
         }
