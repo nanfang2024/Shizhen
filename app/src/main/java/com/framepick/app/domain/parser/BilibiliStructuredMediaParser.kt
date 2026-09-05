@@ -246,7 +246,7 @@ class BilibiliStructuredMediaParser(
         )
     }
 
-    /** Probes anonymous quality tiers (720P/480P/360P) and keeps distinct results. */
+    /** Probes anonymous quality tiers (1080P/720P/480P/360P) and keeps distinct results. */
     private fun anonymousQualityCandidates(
         meta: BilibiliStateExtractor.BiliVideoMeta,
         pageUrl: String,
@@ -270,7 +270,7 @@ class BilibiliStructuredMediaParser(
         runCatching {
             client.newCall(
                 Request.Builder()
-                    .url("https://api.bilibili.com/x/player/playurl?bvid=$bvid&cid=$cid&qn=$qn&fnval=0&fourm=1")
+                    .url(BilibiliStateExtractor.playUrlEndpoint(bvid, cid, qn))
                     .header("User-Agent", DESKTOP_USER_AGENT)
                     .header("Referer", pageUrl)
                     .get()
@@ -349,7 +349,7 @@ class BilibiliStructuredMediaParser(
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 
         /** Anonymous tiers only; higher qualities require login and are not fetched. */
-        val ANONYMOUS_QUALITY_TIERS = listOf(64, 16)
+        val ANONYMOUS_QUALITY_TIERS = listOf(80, 64, 32, 16)
     }
 }
 
@@ -513,6 +513,16 @@ internal object BilibiliStateExtractor {
             else -> 3
         }
     }
+
+    /**
+     * Builds the anonymous `playurl` endpoint. `platform=html5` with
+     * `high_quality=1` and `fnval=0` returns the browser-streamable merged
+     * mp4 (`durl`) that plain clients can fetch without app-level headers;
+     * `fourk=1` lifts the 4K flag so higher tiers are offered when allowed.
+     */
+    internal fun playUrlEndpoint(bvid: String, cid: Long, qn: Int): String =
+        "https://api.bilibili.com/x/player/playurl" +
+            "?bvid=$bvid&cid=$cid&qn=$qn&platform=html5&high_quality=1&fnval=0&fourk=1"
 
     /** Reads the effective quality code of an anonymous playurl response. */
     fun playUrlQuality(playUrlJson: String): Int? {

@@ -184,6 +184,29 @@ class BilibiliStateExtractorTest {
     }
 
     @Test
+    fun playUrlEndpointKeepsBrowserFriendlyParameters() {
+        val endpoint = BilibiliStateExtractor.playUrlEndpoint(
+            bvid = "BV1Xyt76VEnk",
+            cid = 41511813191L,
+            qn = 64,
+        )
+
+        assertEquals(
+            "https://api.bilibili.com/x/player/playurl" +
+                "?bvid=BV1Xyt76VEnk&cid=41511813191&qn=64" +
+                "&platform=html5&high_quality=1&fnval=0&fourk=1",
+            endpoint,
+        )
+        // The browser-friendly combo must stay intact; `fourm` is a known
+        // typo of `fourk` and must never come back.
+        assertTrue(endpoint.contains("platform=html5"))
+        assertTrue(endpoint.contains("high_quality=1"))
+        assertTrue(endpoint.contains("fnval=0"))
+        assertTrue(endpoint.contains("fourk=1"))
+        assertTrue(!endpoint.contains("fourm"))
+    }
+
+    @Test
     fun urlDetectorMatchesVideoOpusBangumiAndShortDomainOnly() {
         assertTrue(BilibiliUrlDetector.isVideoPage("https://www.bilibili.com/video/BV1GJ411x7h7/"))
         assertTrue(BilibiliUrlDetector.isVideoPage("https://m.bilibili.com/video/BV1Test/"))
