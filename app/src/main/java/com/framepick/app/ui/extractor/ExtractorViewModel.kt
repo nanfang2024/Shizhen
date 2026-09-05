@@ -187,14 +187,6 @@ class ExtractorViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun cancelDownload(task: DownloadTask) {
-        if (task.state != androidx.work.WorkInfo.State.RUNNING &&
-            task.state != androidx.work.WorkInfo.State.ENQUEUED &&
-            task.state != androidx.work.WorkInfo.State.BLOCKED
-        ) return
-        downloadRepository.cancel(task.workId)
-    }
-
     fun clear() {
         parseJob?.cancel()
         _uiState.value = ExtractorUiState(downloads = _uiState.value.downloads)

@@ -25,7 +25,7 @@ verify:
   - type: shell
     command: cd /workspace && JAVA_TOOL_OPTIONS="-XX:-UseContainerSupport" JAVA_HOME=$(mise where java@17.0.2) ANDROID_SDK_ROOT=/opt/android-sdk ./gradlew testDebugUnitTest --no-daemon --max-workers=2
 
-- [ ] **Step 2: 矢量图标与品牌资源**
+- [x] **Step 2: 矢量图标与品牌资源**
 action: ① 重绘 res/drawable/ic_launcher_foreground.xml：取景框四角括号 + 对角光痕意象的矢量路径（中心 66% 安全区内留白构图）。② 重绘 res/drawable/ic_launcher_monochrome.xml（同前景路径纯色，供 Android 13+ 主题图标）。③ res/values/colors.xml：新增 ic_launcher_background 品牌底色（沿用暖橙色系衔接回退主题）。④ 更新 res/drawable/ic_splash_brand.xml 为新品牌图形。⑤ 检查 res/mipmap* 目录：minSdk 26 下仅 mipmap-anydpi-v26 自适应引用即可，如存在旧 PNG 密度图则 git rm。⑥ BrandSplashScreen.kt 与 strings.xml 中的品牌名/标语文案更新为「拾光无痕」（标语可定为「拾取光影，不留痕迹」）。
 loop: false
 verify:
@@ -36,7 +36,7 @@ verify:
     assert:
       kind: exists
 
-- [ ] **Step 3: 第一段验收、提交与人工检查点**
+- [x] **Step 3: 第一段验收、提交与人工检查点**
 action: 依次执行 testDebugUnitTest、lintDebug、assembleDebug（带降堆参数，分开逐个），全部退出码 0。`git status --short` 核对变更仅限：全量源文件包声明/导入、两个重命名类文件、build.gradle.kts、AndroidManifest.xml、res/（主题/图标/字符串/colors）、schemas 清理。提交 commit：`Phase 3a: migrate package to com.framepick.app`。向用户汇报 grep 零残留结果与三连状态，人工确认后进入第二段（UI 重构）。
 loop: until 三命令全绿
 max_iterations: 3

@@ -61,7 +61,7 @@ import com.framepick.app.ui.components.EmptyState
 import com.framepick.app.ui.components.HeaderBrandMark
 import com.framepick.app.ui.components.SecondaryActionButton
 import com.framepick.app.ui.components.WarmAccentBadge
-import com.framepick.app.ui.theme.autumnColors
+import com.framepick.app.ui.theme.extendedColors
 import com.framepick.app.util.FileIntentUtils
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -309,8 +309,8 @@ private fun HistoryCard(
 private fun HistoryStatusBadge(status: OperationStatus) {
     when (status) {
         OperationStatus.SUCCESS -> androidx.compose.material3.Surface(
-            color = MaterialTheme.autumnColors.successContainer,
-            contentColor = MaterialTheme.autumnColors.onSuccessContainer,
+            color = MaterialTheme.extendedColors.successContainer,
+            contentColor = MaterialTheme.extendedColors.onSuccessContainer,
             shape = RoundedCornerShape(50),
         ) {
             Text(

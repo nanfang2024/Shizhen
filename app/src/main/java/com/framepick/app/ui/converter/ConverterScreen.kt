@@ -72,7 +72,7 @@ import com.framepick.app.ui.components.SectionHeader
 import com.framepick.app.ui.components.SuccessState
 import com.framepick.app.ui.components.WarmAccentBadge
 import com.framepick.app.ui.components.WarmSurfaceCard
-import com.framepick.app.ui.theme.autumnColors
+import com.framepick.app.ui.theme.extendedColors
 import com.framepick.app.util.FileIntentUtils
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers

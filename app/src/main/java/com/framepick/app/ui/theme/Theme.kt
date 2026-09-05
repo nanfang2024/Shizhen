@@ -1,11 +1,14 @@
 package com.framepick.app.ui.theme
 
 import android.app.Activity
+import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -13,6 +16,7 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
@@ -103,18 +107,29 @@ private val AppShapes = Shapes(
     extraLarge = RoundedCornerShape(24.dp),
 )
 
-val MaterialTheme.autumnColors: AutumnExtendedColors
+val MaterialTheme.extendedColors: FramePickExtendedColors
     @Composable
     @ReadOnlyComposable
-    get() = LocalAutumnExtendedColors.current
+    get() = LocalFramePickExtendedColors.current
 
 @Composable
-fun MediaExtractorTheme(
+fun FramePickTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
-    val colors = if (darkTheme) DarkColors else LightColors
-    val extendedColors = if (darkTheme) DarkAutumnExtendedColors else LightAutumnExtendedColors
+    val dynamicColor = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val context = LocalContext.current
+    val colors = when {
+        dynamicColor && darkTheme -> dynamicDarkColorScheme(context)
+        dynamicColor -> dynamicLightColorScheme(context)
+        darkTheme -> DarkColors
+        else -> LightColors
+    }
+    val extendedColors = if (dynamicColor) {
+        dynamicFramePickExtendedColors(colors, darkTheme)
+    } else {
+        if (darkTheme) DarkFramePickExtendedColors else LightFramePickExtendedColors
+    }
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
@@ -127,7 +142,7 @@ fun MediaExtractorTheme(
             }
         }
     }
-    CompositionLocalProvider(LocalAutumnExtendedColors provides extendedColors) {
+    CompositionLocalProvider(LocalFramePickExtendedColors provides extendedColors) {
         MaterialTheme(
             colorScheme = colors,
             typography = AppTypography,

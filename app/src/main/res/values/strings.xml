@@ -5,6 +5,12 @@
     <string name="nav_extractor">链接提取</string>
     <string name="nav_converter">格式转换</string>
     <string name="nav_history">历史记录</string>
+    <string name="nav_downloads">下载管理</string>
+    <string name="downloads_title">下载管理</string>
+    <string name="downloads_subtitle">查看下载任务进度与保存结果</string>
+    <string name="downloads_empty_title">暂无下载任务</string>
+    <string name="downloads_empty_body">在首页解析链接并下载媒体后，任务进度会显示在这里。</string>
+    <string name="downloads_tasks_title">下载任务</string>
     <string name="extractor_title">公开媒体提取</string>
     <string name="extractor_subtitle">粘贴公开分享链接，提取其中的视频、图片和音频</string>
     <string name="extractor_input_label">粘贴或输入分享文字</string>
@@ -23,4 +29,12 @@
     <string name="history_empty_title">暂无历史记录</string>
     <string name="history_empty_body">完成解析、下载或转换后，结果会显示在这里。</string>
     <string name="rights_notice">仅处理无需登录、无 DRM 且你有权保存的公开内容。</string>
+    <string name="disclaimer_title">免责声明</string>
+    <string name="disclaimer_clause_1">1. 本工具仅供个人学习与研究使用。</string>
+    <string name="disclaimer_clause_2">2. 请遵守各平台服务条款及著作权法规，下载内容请在授权范围内使用。</string>
+    <string name="disclaimer_clause_3">3. 本工具不提供访问控制、DRM 或付费内容的绕过手段。</string>
+    <string name="disclaimer_clause_4">4.「无水印」指优先提取平台公开无水印播放源，画面内已烧录的标识不在处理范围。</string>
+    <string name="disclaimer_clause_5">5. 使用本工具产生的一切责任由使用者自行承担。</string>
+    <string name="disclaimer_accept">同意并继续</string>
+    <string name="disclaimer_exit">退出</string>
 </resources>

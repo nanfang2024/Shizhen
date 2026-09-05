@@ -4,7 +4,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Transform
 import androidx.compose.material3.Icon
@@ -22,18 +22,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.framepick.app.R
+import com.framepick.app.data.preferences.DisclaimerStore
+import com.framepick.app.ui.components.DisclaimerDialog
 import com.framepick.app.ui.converter.ConverterScreen
 import com.framepick.app.ui.converter.ConverterViewModel
+import com.framepick.app.ui.downloads.DownloadsScreen
+import com.framepick.app.ui.downloads.DownloadsViewModel
 import com.framepick.app.ui.extractor.ExtractorScreen
 import com.framepick.app.ui.extractor.ExtractorViewModel
-import com.framepick.app.ui.history.HistoryScreen
-import com.framepick.app.ui.history.HistoryViewModel
-import com.framepick.app.ui.theme.autumnColors
+import com.framepick.app.ui.theme.extendedColors
 import kotlinx.coroutines.flow.StateFlow
 
 private enum class AppDestination(
@@ -42,15 +45,25 @@ private enum class AppDestination(
 ) {
     EXTRACTOR(R.string.nav_extractor, Icons.Outlined.Link),
     CONVERTER(R.string.nav_converter, Icons.Outlined.Transform),
-    HISTORY(R.string.nav_history, Icons.Outlined.History),
+    DOWNLOADS(R.string.nav_downloads, Icons.Outlined.Download),
 }
 
 @Composable
 fun MediaExtractorApp(sharedText: StateFlow<String?>) {
+    val context = LocalContext.current
+    var disclaimerAccepted by rememberSaveable {
+        mutableStateOf(!DisclaimerStore.shouldShowDisclaimer(DisclaimerStore.acceptedVersion(context)))
+    }
+
+    if (!disclaimerAccepted) {
+        DisclaimerDialog(onAccept = { disclaimerAccepted = true })
+        return
+    }
+
     var destination by rememberSaveable { mutableStateOf(AppDestination.EXTRACTOR) }
     val extractorViewModel: ExtractorViewModel = viewModel()
     val converterViewModel: ConverterViewModel = viewModel()
-    val historyViewModel: HistoryViewModel = viewModel()
+    val downloadsViewModel: DownloadsViewModel = viewModel()
 
     val incomingText by sharedText.collectAsStateWithLifecycle()
     LaunchedEffect(incomingText) {
@@ -89,7 +102,7 @@ fun MediaExtractorApp(sharedText: StateFlow<String?>) {
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = MaterialTheme.colorScheme.primary,
                             selectedTextColor = MaterialTheme.colorScheme.primary,
-                            indicatorColor = MaterialTheme.autumnColors.selectedContainer,
+                            indicatorColor = MaterialTheme.extendedColors.selectedContainer,
                             unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                             unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
                         ),
@@ -101,7 +114,7 @@ fun MediaExtractorApp(sharedText: StateFlow<String?>) {
         when (destination) {
             AppDestination.EXTRACTOR -> ExtractorScreen(extractorViewModel, Modifier.padding(padding))
             AppDestination.CONVERTER -> ConverterScreen(converterViewModel, Modifier.padding(padding))
-            AppDestination.HISTORY -> HistoryScreen(historyViewModel, Modifier.padding(padding))
+            AppDestination.DOWNLOADS -> DownloadsScreen(downloadsViewModel, Modifier.padding(padding))
         }
     }
 }

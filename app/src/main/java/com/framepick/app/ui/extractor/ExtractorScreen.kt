@@ -37,14 +37,12 @@ import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.LinkOff
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.PlayCircleOutline
-import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.StopCircle
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -94,9 +92,8 @@ import com.framepick.app.ui.components.SectionHeader
 import com.framepick.app.ui.components.SuccessState
 import com.framepick.app.ui.components.WarmAccentBadge
 import com.framepick.app.ui.components.WarmSurfaceCard
-import com.framepick.app.ui.theme.autumnColors
+import com.framepick.app.ui.theme.extendedColors
 import com.framepick.app.util.DiagnosticLogger
-import com.framepick.app.util.FileIntentUtils
 import java.util.Locale
 
 @Composable
@@ -161,9 +158,6 @@ fun ExtractorScreen(
                     downloads = state.downloads,
                     onDownload = { requestDownloads(listOf(it)) },
                     onDownloadAll = requestDownloads,
-                    onCancel = viewModel::cancelDownload,
-                    onOpen = { uri -> FileIntentUtils.open(context, uri) },
-                    onShare = { uri -> FileIntentUtils.share(context, uri) },
                 )
             } else if (!state.isParsing && state.errorMessage == null) {
                 EmptyState(
@@ -251,7 +245,7 @@ private fun RecognizedLinkCard(state: ExtractorUiState) {
             Icon(
                 Icons.Outlined.CheckCircle,
                 contentDescription = "识别成功",
-                tint = MaterialTheme.autumnColors.success,
+                tint = MaterialTheme.extendedColors.success,
             )
         }
         Text(
@@ -329,9 +323,6 @@ private fun ParsedMediaContent(
     downloads: Map<String, DownloadTask>,
     onDownload: (MediaItem) -> Unit,
     onDownloadAll: (List<MediaItem>) -> Unit,
-    onCancel: (DownloadTask) -> Unit,
-    onOpen: (String) -> Unit,
-    onShare: (String) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         WorkOverviewCard(media)
@@ -402,14 +393,6 @@ private fun ParsedMediaContent(
                 previewButtonText = "预览",
             )
         }
-
-        DownloadTasksSection(
-            media = media,
-            downloads = downloads,
-            onCancel = onCancel,
-            onOpen = onOpen,
-            onShare = onShare,
-        )
     }
 }
 
@@ -679,103 +662,14 @@ private fun ImageGalleryCard(
     }
 }
 
-@Composable
-private fun DownloadTasksSection(
-    media: ParsedMedia,
-    downloads: Map<String, DownloadTask>,
-    onCancel: (DownloadTask) -> Unit,
-    onOpen: (String) -> Unit,
-    onShare: (String) -> Unit,
-) {
-    val taskItems = media.items.mapNotNull { item -> downloads[item.id]?.let { item to it } }
-    if (taskItems.isEmpty()) return
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        SectionHeader("下载任务状态", supportingText = "任务由系统在后台执行，离开页面后仍会继续")
-        taskItems.forEach { (item, task) ->
-            DownloadTaskCard(item, task, onCancel, onOpen, onShare)
-        }
-    }
-}
-
-@Composable
-private fun DownloadTaskCard(
-    item: MediaItem,
-    task: DownloadTask,
-    onCancel: (DownloadTask) -> Unit,
-    onOpen: (String) -> Unit,
-    onShare: (String) -> Unit,
-) {
-    WarmSurfaceCard {
-        SectionHeader(
-            title = item.displayFileName(),
-            supportingText = item.fileSize?.let { total ->
-                val downloaded = (total * task.progress / 100.0).toLong()
-                "${downloaded.formatSize()} / ${total.formatSize()}"
-            } ?: "文件大小未知",
-            action = { WarmAccentBadge(task.state.displayName(), emphasis = task.state == WorkInfo.State.SUCCEEDED) },
-        )
-        when (task.state) {
-            WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED -> {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                Text("等待下载", style = MaterialTheme.typography.bodyMedium)
-                SecondaryActionButton("取消下载", { onCancel(task) }, Modifier.fillMaxWidth())
-            }
-            WorkInfo.State.RUNNING -> {
-                LinearProgressIndicator(
-                    progress = { task.progress.coerceIn(0, 100) / 100f },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Text("下载中 ${task.progress.coerceIn(0, 100)}%", color = MaterialTheme.colorScheme.primary)
-                SecondaryActionButton("取消下载", { onCancel(task) }, Modifier.fillMaxWidth())
-            }
-            WorkInfo.State.SUCCEEDED -> {
-                Text("下载完成", color = MaterialTheme.autumnColors.success, style = MaterialTheme.typography.labelLarge)
-                Text(
-                    "保存位置：${item.defaultSaveLocation()}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                task.outputUri?.let { uri ->
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        PrimaryActionButton(
-                            "打开文件",
-                            { onOpen(uri) },
-                            Modifier.weight(1f),
-                        )
-                        SecondaryActionButton(
-                            "分享",
-                            { onShare(uri) },
-                            Modifier.weight(1f),
-                            icon = { Icon(Icons.Outlined.Share, contentDescription = null, Modifier.size(18.dp)) },
-                        )
-                    }
-                }
-            }
-            WorkInfo.State.FAILED, WorkInfo.State.CANCELLED -> {
-                Text(
-                    if (task.state == WorkInfo.State.CANCELLED) "下载已取消" else "下载失败",
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.labelLarge,
-                )
-                task.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                Text(
-                    "详细原因可在“历史记录 → 诊断中心”中查看。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
-}
-
 private fun MediaItem.isDownloadAllowed(): Boolean =
     sourceWatermark != SourceWatermark.WATERMARKED || allowWatermarkedDownload
 
 @Composable
 private fun SourceWatermarkLabel(status: SourceWatermark) {
     val (text, color) = when (status) {
-        SourceWatermark.PUBLIC_ORIGINAL -> "来源：平台公开原始源" to MaterialTheme.autumnColors.success
-        SourceWatermark.PUBLIC_CLEAN -> "来源：平台公开无水印播放源" to MaterialTheme.autumnColors.success
+        SourceWatermark.PUBLIC_ORIGINAL -> "来源：平台公开原始源" to MaterialTheme.extendedColors.success
+        SourceWatermark.PUBLIC_CLEAN -> "来源：平台公开无水印播放源" to MaterialTheme.extendedColors.success
         SourceWatermark.WATERMARKED -> "来源：平台明确标记为带水印" to MaterialTheme.colorScheme.error
         SourceWatermark.UNKNOWN -> "来源：水印状态未验证" to MaterialTheme.colorScheme.onSurfaceVariant
     }
@@ -965,32 +859,6 @@ private fun MediaItem.variantTitle(): String = when (type) {
     else -> qualityLabel ?: resolutionText()
 }
 
-private fun MediaItem.displayFileName(): String {
-    val base = when (type) {
-        MediaType.VIDEO -> "视频"
-        MediaType.IMAGE -> "图片"
-        MediaType.GIF -> "动图"
-        MediaType.COVER -> "封面"
-        MediaType.AUDIO -> if (isPreviewOnly) "试听片段" else "音频"
-        MediaType.UNKNOWN -> "媒体"
-    }
-    val suffix = qualityLabel?.replace(Regex("[^0-9A-Za-z\u4e00-\u9fa5_-]"), "_")
-        ?.takeIf { it.isNotBlank() }
-    val extension = format?.lowercase(Locale.ROOT)?.takeIf { it.matches(Regex("[a-z0-9]{2,5}")) }
-    return buildString {
-        append(base)
-        suffix?.let { append("_$it") }
-        extension?.let { append(".$it") }
-    }
-}
-
-private fun MediaItem.defaultSaveLocation(): String = when (type) {
-    MediaType.VIDEO -> "Movies/FramePick"
-    MediaType.IMAGE, MediaType.GIF, MediaType.COVER -> "Pictures/FramePick"
-    MediaType.AUDIO -> "Music/FramePick"
-    MediaType.UNKNOWN -> "Download/FramePick"
-}
-
 private fun MediaItem.downloadLabel(task: DownloadTask?): String = when {
     task?.state == WorkInfo.State.RUNNING -> "下载中 ${task.progress}%"
     task?.state == WorkInfo.State.ENQUEUED || task?.state == WorkInfo.State.BLOCKED -> "等待下载"
@@ -1011,15 +879,6 @@ private fun MediaType.displayName(): String = when (this) {
     MediaType.COVER -> "封面"
     MediaType.AUDIO -> "音频"
     MediaType.UNKNOWN -> "未知资源"
-}
-
-private fun WorkInfo.State.displayName(): String = when (this) {
-    WorkInfo.State.ENQUEUED -> "等待中"
-    WorkInfo.State.RUNNING -> "下载中"
-    WorkInfo.State.SUCCEEDED -> "已完成"
-    WorkInfo.State.FAILED -> "失败"
-    WorkInfo.State.BLOCKED -> "等待条件"
-    WorkInfo.State.CANCELLED -> "已取消"
 }
 
 private fun MediaItem.resolutionText(): String = when {

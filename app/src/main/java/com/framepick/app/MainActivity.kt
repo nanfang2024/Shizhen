@@ -13,7 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.framepick.app.ui.brand.BrandSplashScreen
 import com.framepick.app.ui.navigation.MediaExtractorApp
-import com.framepick.app.ui.theme.MediaExtractorTheme
+import com.framepick.app.ui.theme.FramePickTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 
@@ -27,7 +27,7 @@ class MainActivity : ComponentActivity() {
         receiveSharedText(intent)
         val showBrandOnThisLaunch = savedInstanceState == null
         setContent {
-            MediaExtractorTheme {
+            FramePickTheme {
                 var showBrand by remember { mutableStateOf(showBrandOnThisLaunch) }
                 LaunchedEffect(showBrand) {
                     if (showBrand) {

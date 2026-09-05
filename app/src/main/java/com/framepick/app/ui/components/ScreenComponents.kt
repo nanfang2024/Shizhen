@@ -54,7 +54,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.framepick.app.ui.theme.autumnColors
+import com.framepick.app.ui.theme.extendedColors
 
 enum class HeaderBrandMark { MAPLE, PAW, NONE }
 
@@ -298,8 +298,8 @@ fun SuccessState(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.autumnColors.successContainer,
-        contentColor = MaterialTheme.autumnColors.onSuccessContainer,
+        color = MaterialTheme.extendedColors.successContainer,
+        contentColor = MaterialTheme.extendedColors.onSuccessContainer,
         shape = RoundedCornerShape(16.dp),
     ) {
         Column(
@@ -414,7 +414,7 @@ fun PawPrintDecoration(
     modifier: Modifier = Modifier,
     alpha: Float = 0.08f,
 ) {
-    val color = MaterialTheme.autumnColors.decoration.copy(alpha = alpha)
+    val color = MaterialTheme.extendedColors.decoration.copy(alpha = alpha)
     Canvas(modifier = modifier.clearAndSetSemantics { }) {
         val w = size.width
         val h = size.height
@@ -430,7 +430,7 @@ fun MapleLeafDecoration(
     modifier: Modifier = Modifier,
     alpha: Float = 0.08f,
 ) {
-    val color = MaterialTheme.autumnColors.brandOrange.copy(alpha = alpha)
+    val color = MaterialTheme.extendedColors.brandOrange.copy(alpha = alpha)
     Canvas(modifier = modifier.clearAndSetSemantics { }) {
         val path = Path().apply {
             moveTo(size.width * 0.50f, size.height * 0.03f)
