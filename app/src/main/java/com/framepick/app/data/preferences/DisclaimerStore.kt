@@ -1,6 +1,7 @@
 package com.framepick.app.data.preferences
 
 import android.content.Context
+import androidx.core.content.edit
 
 /**
  * Gates first launch behind a blocking disclaimer. Re-acceptance is required
