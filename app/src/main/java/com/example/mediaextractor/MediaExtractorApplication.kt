@@ -17,7 +17,9 @@ import com.example.mediaextractor.data.repository.RoomHistoryRepository
 import com.example.mediaextractor.domain.parser.GenericMediaParser
 import com.example.mediaextractor.domain.parser.DouyinStructuredMediaParser
 import com.example.mediaextractor.domain.parser.DoubaoPublicMediaParser
+import com.example.mediaextractor.domain.parser.BilibiliStructuredMediaParser
 import com.example.mediaextractor.domain.parser.KuaishouStructuredMediaParser
+import com.example.mediaextractor.domain.parser.PipixiaStructuredMediaParser
 import com.example.mediaextractor.domain.parser.InternationalPublicPageMediaParser
 import com.example.mediaextractor.domain.parser.NeteaseMusicMediaParser
 import com.example.mediaextractor.domain.parser.ParserRegistry
@@ -111,6 +113,8 @@ class MediaExtractorApplication : Application(), ImageLoaderFactory {
                 DouyinStructuredMediaParser(httpClient),
                 XiaohongshuStructuredMediaParser(httpClient),
                 KuaishouStructuredMediaParser(httpClient),
+                PipixiaStructuredMediaParser(httpClient),
+                BilibiliStructuredMediaParser(httpClient),
                 NeteaseMusicMediaParser(httpClient),
                 YtDlpMediaParser(this, httpClient),
                 InternationalPublicPageMediaParser(httpClient),

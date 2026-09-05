@@ -13,6 +13,19 @@ class PlatformRecognizerTest {
     }
 
     @Test
+    fun recognizesBilibiliVideoAndOpusPages() {
+        assertEquals(
+            "哔哩哔哩",
+            PlatformRecognizer.recognize("https://www.bilibili.com/video/BV1GJ411x7h7/")
+                ?.displayName,
+        )
+        assertEquals(
+            "哔哩哔哩",
+            PlatformRecognizer.recognize("https://m.bilibili.com/opus/123456")?.displayName,
+        )
+    }
+
+    @Test
     fun usesDomainForUnknownPlatform() {
         assertEquals(
             "media.example.com",
@@ -51,6 +64,18 @@ class PlatformRecognizerTest {
             "快手",
             PlatformRecognizer.recognize("https://v.m.chenzhongtech.com/fw/photo/example")
                 ?.displayName,
+        )
+    }
+
+    @Test
+    fun recognizesPipixiaShareAndItemDomains() {
+        assertEquals(
+            "皮皮虾",
+            PlatformRecognizer.recognize("https://h5.pipix.com/s/abc/")?.displayName,
+        )
+        assertEquals(
+            "皮皮虾",
+            PlatformRecognizer.recognize("https://www.pipix.com/item/123456/")?.displayName,
         )
     }
 

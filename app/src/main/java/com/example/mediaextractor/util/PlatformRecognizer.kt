@@ -17,6 +17,7 @@ object PlatformRecognizer {
         setOf("xiaohongshu.com", "xhslink.com", "xhslink.cn", "rednote.com") to "小红书",
         setOf("kuaishou.com", "chenzhongtech.com", "gifshow.com", "kwai.com") to "快手",
         setOf("ixigua.com", "xigua.com") to "西瓜视频",
+        setOf("pipix.com") to "皮皮虾",
         setOf("acfun.cn") to "AcFun",
         setOf("youku.com", "tudou.com") to "优酷",
         setOf("iqiyi.com") to "爱奇艺",
