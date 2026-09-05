@@ -196,4 +196,75 @@ class BilibiliStateExtractorTest {
         assertEquals(false, BilibiliUrlDetector.isVideoPage("https://space.bilibili.com/123"))
         assertEquals(false, BilibiliUrlDetector.isVideoPage("https://www.example.com/video/x"))
     }
+
+    @Test
+    fun extractsVideoMetaFromViewDetailAndWbiShapes() {
+        val detail = BilibiliStateExtractor.extractVideoMetaFromViewJson(
+            """
+            {"code":0,"data":{"View":{
+              "bvid":"BV1Xyt76VEnk","aid":1,"cid":41511813191,"title":"公开测试标题",
+              "pic":"http://i0.hdslb.com/bfs/archive/cover.jpg",
+              "owner":{"name":"测试UP主"},"duration":132,
+              "pages":[{"cid":41511813191,"page":1,"part":"P1"}]
+            }}}
+            """.trimIndent(),
+        )
+        requireNotNull(detail)
+        assertEquals("BV1Xyt76VEnk", detail.bvid)
+        assertEquals(41511813191L, detail.cid)
+        assertEquals("公开测试标题", detail.title)
+        assertEquals("https://i0.hdslb.com/bfs/archive/cover.jpg", detail.picUrl)
+        assertEquals("测试UP主", detail.ownerName)
+        assertEquals(132L, detail.durationSeconds)
+
+        val wbi = BilibiliStateExtractor.extractVideoMetaFromViewJson(
+            """
+            {"code":0,"data":{
+              "bvid":"BV1Xyt76VEnk","cid":41511813191,"title":"直挂形状",
+              "pic":"https://i0.hdslb.com/bfs/archive/cover.jpg","owner":{"name":"UP"},"duration":132
+            }}
+            """.trimIndent(),
+        )
+        requireNotNull(wbi)
+        assertEquals(41511813191L, wbi.cid)
+        assertEquals("直挂形状", wbi.title)
+
+        val cidFromPages = BilibiliStateExtractor.extractVideoMetaFromViewJson(
+            """
+            {"code":0,"data":{"View":{"bvid":"BV1Xyt76VEnk","title":"无顶层cid",
+              "pages":[{"cid":999,"page":1}]}}}
+            """.trimIndent(),
+        )
+        assertEquals(999L, cidFromPages?.cid)
+
+        assertNull(BilibiliStateExtractor.extractVideoMetaFromViewJson("""{"code":-412,"data":{}}"""))
+        assertNull(BilibiliStateExtractor.extractVideoMetaFromViewJson("""{"code":0,"data":{"View":{"bvid":"BV1x"}}}"""))
+        assertNull(BilibiliStateExtractor.extractVideoMetaFromViewJson("not json"))
+    }
+
+    @Test
+    fun extractsMinimalMetaFromPagelist() {
+        val meta = BilibiliStateExtractor.extractVideoMetaFromPagelist(
+            bvid = "BV1Xyt76VEnk",
+            json = """{"code":0,"data":[{"cid":41511813191,"page":1,"part":"分P标题","duration":132}]}""",
+        )
+        requireNotNull(meta)
+        assertEquals("BV1Xyt76VEnk", meta.bvid)
+        assertEquals(41511813191L, meta.cid)
+        assertEquals("分P标题", meta.title)
+        assertEquals(132L, meta.durationSeconds)
+        assertNull(meta.picUrl)
+
+        assertNull(BilibiliStateExtractor.extractVideoMetaFromPagelist("BV1x", """{"code":0,"data":[]}"""))
+        assertNull(BilibiliStateExtractor.extractVideoMetaFromPagelist("BV1x", """{"code":-404,"data":[]}"""))
+    }
+
+    @Test
+    fun extractsBvidFromEveryKnownUrlForm() {
+        assertEquals("BV1Xyt76VEnk", BilibiliUrlDetector.extractBvid("https://www.bilibili.com/video/BV1Xyt76VEnk/"))
+        assertEquals("BV1Xyt76VEnk", BilibiliUrlDetector.extractBvid("https://www.bilibili.com/video/BV1Xyt76VEnk?p=2&spm_id_from=333"))
+        assertEquals("BV1Xyt76VEnk", BilibiliUrlDetector.extractBvid("https://m.bilibili.com/video/BV1Xyt76VEnk"))
+        assertNull(BilibiliUrlDetector.extractBvid("https://b23.tv/akvtBeX"))
+        assertNull(BilibiliUrlDetector.extractBvid("https://www.bilibili.com/video/av123"))
+    }
 }

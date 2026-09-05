@@ -17,6 +17,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 import org.jsoup.Jsoup
 
 /** Reads public structured state from Douyin links, including Xigua links using its short domain. */
@@ -58,12 +59,7 @@ class DouyinStructuredMediaParser(
                         )
                     }
             } else {
-                if (!page.isSuccessful) throw IOException("抖音公开页面返回状态 ${page.code}")
-                DouyinRouterDataExtractor.extract(url, page.finalUrl, page.html)
-                    ?: throw MediaParseException(
-                        MediaParseException.Reason.NO_MEDIA,
-                        "抖音公开页面没有返回可读取的媒体资源。",
-                    )
+                parseDouyin(url, page)
             }
         }.recoverCatching { failure ->
             throw when (failure) {
@@ -105,18 +101,19 @@ class DouyinStructuredMediaParser(
         } else {
             "https://www.iesdouyin.com/"
         }
-        val response = client.newCall(
-            Request.Builder()
-                .url(url)
-                .header("User-Agent", userAgent)
-                .header("Accept", "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8")
-                .header("Accept-Language", "zh-CN,zh;q=0.9")
-                .header("Referer", referer)
-                .header("Cache-Control", "no-cache")
-                .get()
-                .build(),
-        ).execute()
+        val builder = Request.Builder()
+            .url(url)
+            .header("User-Agent", userAgent)
+            .header("Accept", "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8")
+            .header("Accept-Language", "zh-CN,zh;q=0.9")
+            .header("Referer", referer)
+            .header("Cache-Control", "no-cache")
+        if (needsAwemeCookie(targetHost)) {
+            currentTtwid()?.let { builder.header("Cookie", "ttwid=$it") }
+        }
+        val response = client.newCall(builder.get().build()).execute()
         return response.use {
+            rememberTtwid(it)
             val page = HttpPage(
                 code = it.code,
                 contentType = it.body?.contentType()?.toString(),
@@ -135,6 +132,72 @@ class DouyinStructuredMediaParser(
             )
             page
         }
+    }
+
+    private fun parseDouyin(sourceUrl: String, page: HttpPage): ParsedMedia {
+        val attempted = linkedSetOf<String>()
+        if (page.isSuccessful) {
+            attempted += page.finalUrl
+            DouyinRouterDataExtractor.extract(sourceUrl, page.finalUrl, page.html)?.let { return it }
+        }
+        // The share page only embeds videoInfoRes when the request carries a
+        // ttwid cookie. The first hit does not always hand one out, so warm one
+        // up explicitly and retry both the video and note routes.
+        warmUpTtwid()
+        val target = DouyinShareTarget.from(page.finalUrl) ?: DouyinShareTarget.from(sourceUrl)
+        val candidates = target?.candidateUrls().orEmpty()
+        for (candidate in candidates) {
+            if (!attempted.add(candidate)) continue
+            val retry = runCatching {
+                requestPage(candidate, BROWSER_USER_AGENT, "douyin_share_retry_response")
+            }.onFailure { failure ->
+                DiagnosticLogger.warning(
+                    category = "DOUYIN_STRUCTURED_PARSE",
+                    event = "douyin_share_retry_failed",
+                    details = mapOf("candidate" to candidate),
+                    failure = failure,
+                )
+            }.getOrNull() ?: continue
+            if (retry.code == 401 || retry.code == 403) throw MediaParseException(
+                MediaParseException.Reason.ACCESS_RESTRICTED,
+                ParserMessages.ACCESS_RESTRICTED,
+            )
+            if (!retry.isSuccessful) continue
+            DouyinRouterDataExtractor.extract(sourceUrl, retry.finalUrl, retry.html)?.let { parsed ->
+                DiagnosticLogger.info(
+                    category = "DOUYIN_STRUCTURED_PARSE",
+                    event = "douyin_share_retry_succeeded",
+                    details = mapOf("candidate" to candidate, "items" to parsed.items.size),
+                )
+                return parsed
+            }
+        }
+        if (!page.isSuccessful && candidates.isEmpty()) {
+            throw IOException("抖音公开页面返回状态 ${page.code}")
+        }
+        throw MediaParseException(
+            MediaParseException.Reason.NO_MEDIA,
+            "抖音公开页面没有返回可读取的媒体资源。",
+        )
+    }
+
+    /** Fetches a ttwid cookie from the share host; douyin.com never issues one. */
+    private fun warmUpTtwid() {
+        if (currentTtwid() != null) return
+        runCatching {
+            requestPage(TTWID_WARM_UP_URL, BROWSER_USER_AGENT, "ttwid_warm_up_response")
+        }.onFailure { failure ->
+            DiagnosticLogger.warning(
+                category = "DOUYIN_STRUCTURED_PARSE",
+                event = "ttwid_warm_up_failed",
+                failure = failure,
+            )
+        }
+        DiagnosticLogger.info(
+            category = "DOUYIN_STRUCTURED_PARSE",
+            event = "ttwid_warm_up_finished",
+            details = mapOf("acquired" to (currentTtwid() != null)),
+        )
     }
 
     private fun parseXiguaFallback(sourceUrl: String, failedFinalUrl: String): ParsedMedia? {
@@ -189,7 +252,70 @@ class DouyinStructuredMediaParser(
         const val DESKTOP_USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
                 "Chrome/124.0.0.0 Safari/537.36"
+
+        /** Only this host hands out the ttwid cookie the share SSR payload needs. */
+        const val TTWID_WARM_UP_URL = "https://www.iesdouyin.com/"
+        val COOKIE_HOSTS = setOf("douyin.com", "iesdouyin.com")
+        private val ttwidRef = java.util.concurrent.atomic.AtomicReference<String?>(null)
+
+        fun needsAwemeCookie(host: String): Boolean {
+            val normalized = host.lowercase(Locale.ROOT)
+            return COOKIE_HOSTS.any { normalized == it || normalized.endsWith(".$it") }
+        }
+
+        fun currentTtwid(): String? = ttwidRef.get()
+
+        fun rememberTtwid(response: Response) {
+            var current: Response? = response
+            while (current != null) {
+                current.headers("Set-Cookie").forEach { raw ->
+                    val pair = raw.substringBefore(';').trim()
+                    if (pair.startsWith("ttwid=", ignoreCase = true)) {
+                        val value = pair.substringAfter('=').trim()
+                        if (value.isNotBlank()) ttwidRef.set(value)
+                    }
+                }
+                current = current.priorResponse
+            }
+        }
     }
+}
+
+/**
+ * Identifies the aweme id and post kind behind a Douyin share link. Both share
+ * routes are probed because video posts sometimes resolve through `/share/note/`
+ * and image posts through `/share/video/`.
+ */
+internal object DouyinShareTarget {
+    private val ID_PATTERNS = listOf(
+        Regex("/(?:share/)?video/(\\d{6,})"),
+        Regex("/(?:share/)?note/(\\d{6,})"),
+        Regex("/(?:share/)?slides/(\\d{6,})"),
+        Regex("modal_id=(\\d{6,})"),
+        Regex("aweme_id=(\\d{6,})"),
+    )
+
+    data class Target(val awemeId: String, val preferNote: Boolean) {
+        fun candidateUrls(): List<String> = if (preferNote) {
+            listOf(noteUrl(awemeId), videoUrl(awemeId))
+        } else {
+            listOf(videoUrl(awemeId), noteUrl(awemeId))
+        }
+    }
+
+    fun from(url: String?): Target? {
+        if (url.isNullOrBlank()) return null
+        val awemeId = ID_PATTERNS.firstNotNullOfOrNull { pattern ->
+            pattern.find(url)?.groupValues?.getOrNull(1)?.takeIf { it.isNotBlank() }
+        } ?: return null
+        val preferNote = url.contains("/note/", ignoreCase = true) ||
+            url.contains("/slides/", ignoreCase = true)
+        return Target(awemeId, preferNote)
+    }
+
+    fun videoUrl(awemeId: String): String = "https://www.iesdouyin.com/share/video/$awemeId/"
+
+    fun noteUrl(awemeId: String): String = "https://www.iesdouyin.com/share/note/$awemeId/"
 }
 
 internal object DouyinRouterDataExtractor {
@@ -202,7 +328,7 @@ internal object DouyinRouterDataExtractor {
             .map { it.data().ifBlank { it.html() } }
             .firstOrNull { it.contains(ROUTER_MARKER) }
             ?: return null
-        val json = script.substringAfter(ROUTER_MARKER).trim().removeSuffix(";")
+        val json = script.substringAfter(ROUTER_MARKER).firstJsonObject() ?: return null
         val root = runCatching { mapper.readTree(json) }.getOrNull() ?: return null
         val entries = root.findValues("item_list").asSequence()
             .flatMap { node -> node.elements().asSequence() }
@@ -471,6 +597,35 @@ internal object DouyinRouterDataExtractor {
     private fun JsonNode.firstPublicUrl(): String? = path("url_list").asSequence()
         .map(JsonNode::asText)
         .firstOrNull { it.startsWith("https://") || it.startsWith("http://") }
+
+    /** The router script keeps executable code after the JSON, so the object needs a balanced slice. */
+    private fun String.firstJsonObject(): String? {
+        val start = indexOf('{')
+        if (start < 0) return null
+        var depth = 0
+        var quoted = false
+        var escaped = false
+        for (index in start until length) {
+            val char = this[index]
+            if (quoted) {
+                when {
+                    escaped -> escaped = false
+                    char == '\\' -> escaped = true
+                    char == '"' -> quoted = false
+                }
+                continue
+            }
+            when (char) {
+                '"' -> quoted = true
+                '{' -> depth++
+                '}' -> {
+                    depth--
+                    if (depth == 0) return substring(start, index + 1)
+                }
+            }
+        }
+        return null
+    }
 
     private fun String.isLikelyVideoUrl(): Boolean {
         val path = runCatching { URI(this).path.lowercase(Locale.ROOT) }.getOrNull() ?: return false

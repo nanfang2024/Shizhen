@@ -32,19 +32,12 @@ class BilibiliStructuredMediaParser(
     override suspend fun parse(url: String): Result<ParsedMedia> = withContext(Dispatchers.IO) {
         DiagnosticLogger.info("BILIBILI_STRUCTURED_PARSE", "parse_started", mapOf("url" to url))
         runCatching {
-            val page = fetchPage(url)
-            val meta = BilibiliStateExtractor.extractVideoMeta(url, page.html)
+            val target = resolveTarget(url)
+            val meta = target?.let { fetchApiMeta(it) }
             if (meta != null) {
                 buildVideoResult(url, meta)
             } else {
-                val images = BilibiliStateExtractor.extractOpusImages(url, page.html)
-                if (images.isNullOrEmpty()) {
-                    throw MediaParseException(
-                        MediaParseException.Reason.NO_MEDIA,
-                        "B站公开页面没有返回可读取的媒体资源。",
-                    )
-                }
-                buildOpusResult(url, images, page.html)
+                parseHtmlFallback(url)
             }
         }.recoverCatching { failure ->
             throw when (failure) {
@@ -79,6 +72,118 @@ class BilibiliStructuredMediaParser(
     }
 
     private class PageResponse(val finalUrl: String, val html: String)
+
+    /** Resolves a b23.tv short link to its BV id (the short domain 412s but still exposes the BV in the redirect). */
+    private fun resolveTarget(url: String): String? {
+        val normalized = PublicUrlNormalizer.upgradeKnownHttp(url)
+        val host = runCatching { java.net.URI(normalized).host.orEmpty().lowercase(Locale.ROOT) }
+            .getOrDefault("")
+        if (host != "b23.tv") return normalized
+        // b23.tv returns 412 to a bare GET, but OkHttp's redirect follower still
+        // records the Location header chain in priorResponse. Walk it to find a BV.
+        val redirectUrl = runCatching {
+            client.newCall(
+                Request.Builder()
+                    .url(normalized)
+                    .header("User-Agent", DESKTOP_USER_AGENT)
+                    .get()
+                    .build(),
+            ).execute().use { response ->
+                DiagnosticLogger.info(
+                    category = "BILIBILI_STRUCTURED_PARSE",
+                    event = "b23_resolve_response",
+                    details = mapOf("status" to response.code, "finalUrl" to response.request.url.toString()),
+                )
+                response.request.url.toString()
+            }
+        }.getOrNull() ?: normalized
+        return BilibiliUrlDetector.extractBvid(redirectUrl)
+            ?.let(BilibiliUrlDetector::videoPageUrl)
+            ?: redirectUrl
+    }
+
+    private fun fetchApiMeta(targetUrl: String): BilibiliStateExtractor.BiliVideoMeta? {
+        val bvid = BilibiliUrlDetector.extractBvid(targetUrl) ?: return null
+        // Primary: anonymous view/detail endpoint (survives the 412 risk control that blocks the HTML page).
+        val detailJson = fetchJson(
+            "https://api.bilibili.com/x/web-interface/view/detail?bvid=$bvid",
+            BilibiliUrlDetector.videoPageUrl(bvid),
+        )
+        if (!detailJson.isNullOrBlank()) {
+            BilibiliStateExtractor.extractVideoMetaFromViewJson(detailJson)?.let { meta ->
+                DiagnosticLogger.info(
+                    category = "BILIBILI_STRUCTURED_PARSE",
+                    event = "view_detail_succeeded",
+                    details = mapOf("bvid" to bvid, "cid" to meta.cid),
+                )
+                return meta
+            }
+        }
+        // Fallback 1: wbi/view (also anonymous-friendly).
+        val wbiJson = fetchJson(
+            "https://api.bilibili.com/x/web-interface/wbi/view?bvid=$bvid",
+            BilibiliUrlDetector.videoPageUrl(bvid),
+        )
+        if (!wbiJson.isNullOrBlank()) {
+            BilibiliStateExtractor.extractVideoMetaFromViewJson(wbiJson)?.let { return it }
+        }
+        // Fallback 2: pagelist gives only cid; fill bvid and leave title/pic empty.
+        val pagelistJson = fetchJson(
+            "https://api.bilibili.com/x/player/pagelist?bvid=$bvid",
+            BilibiliUrlDetector.videoPageUrl(bvid),
+        )
+        if (!pagelistJson.isNullOrBlank()) {
+            BilibiliStateExtractor.extractVideoMetaFromPagelist(bvid, pagelistJson)?.let { return it }
+        }
+        return null
+    }
+
+    private fun fetchJson(apiUrl: String, referer: String): String? = runCatching {
+        client.newCall(
+            Request.Builder()
+                .url(apiUrl)
+                .header("User-Agent", DESKTOP_USER_AGENT)
+                .header("Accept", "application/json, text/plain, */*")
+                .header("Referer", referer)
+                .get()
+                .build(),
+        ).execute().use { response ->
+            if (!response.isSuccessful) {
+                DiagnosticLogger.warning(
+                    category = "BILIBILI_STRUCTURED_PARSE",
+                    event = "api_request_failed",
+                    details = mapOf("url" to apiUrl, "status" to response.code),
+                )
+                return@runCatching null
+            }
+            response.body?.string()
+        }
+    }.onFailure { failure ->
+        DiagnosticLogger.warning(
+            category = "BILIBILI_STRUCTURED_PARSE",
+            event = "api_request_error",
+            details = mapOf("url" to apiUrl),
+            failure = failure,
+        )
+    }.getOrNull()?.takeIf { it.isNotBlank() }
+
+    private fun parseHtmlFallback(url: String): ParsedMedia {
+        // Last resort: the HTML page (currently 412s in most regions). If it
+        // somehow loads, extract opus images or __INITIAL_STATE__ from it.
+        val page = fetchPage(url)
+        val meta = BilibiliStateExtractor.extractVideoMeta(url, page.html)
+        if (meta != null) {
+            return buildVideoResult(url, meta)
+        }
+        val images = BilibiliStateExtractor.extractOpusImages(url, page.html)
+        if (images.isNullOrEmpty()) {
+            throw MediaParseException(
+                MediaParseException.Reason.NO_MEDIA,
+                "B站公开页面没有返回可读取的媒体资源。",
+            )
+        }
+        return buildOpusResult(url, images, page.html)
+    }
 
     private fun fetchPage(url: String): PageResponse {
         client.newCall(
@@ -243,7 +348,7 @@ class BilibiliStructuredMediaParser(
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 
         /** Anonymous tiers only; higher qualities require login and are not fetched. */
-        val ANONYMOUS_QUALITY_TIERS = listOf(64, 32, 16)
+        val ANONYMOUS_QUALITY_TIERS = listOf(64, 16)
     }
 }
 
@@ -282,6 +387,48 @@ internal object BilibiliStateExtractor {
             picUrl = videoData.path("pic").asText().trim().toPublicUrl(),
             ownerName = videoData.path("owner").path("name").asText().trim().ifBlank { null },
             durationSeconds = videoData.path("duration").asLong().takeIf { it > 0L },
+        )
+    }
+
+    /**
+     * Parses `x/web-interface/view/detail` or `x/web-interface/wbi/view`
+     * responses. `view/detail` nests the archive under `data.View`, while
+     * `wbi/view` returns it directly under `data`.
+     */
+    fun extractVideoMetaFromViewJson(json: String): BiliVideoMeta? {
+        val root = runCatching { mapper.readTree(json) }.getOrNull() ?: return null
+        if (root.path("code").asInt(-1) != 0) return null
+        val data = root.path("data")
+        val view = if (data.path("View").isObject) data.path("View") else data
+        if (!view.isObject) return null
+        val bvid = view.path("bvid").asText().trim()
+        if (bvid.isBlank()) return null
+        val cid = view.path("cid").asLong().takeIf { it > 0L }
+            ?: view.path("pages").firstOrNull()?.path("cid")?.asLong()?.takeIf { it > 0L }
+            ?: return null
+        return BiliVideoMeta(
+            bvid = bvid,
+            cid = cid,
+            title = view.path("title").asText().trim().ifBlank { null },
+            picUrl = view.path("pic").asText().trim().let { PublicUrlNormalizer.upgradeKnownHttp(it) },
+            ownerName = view.path("owner").path("name").asText().trim().ifBlank { null },
+            durationSeconds = view.path("duration").asLong().takeIf { it > 0L },
+        )
+    }
+
+    /** Minimal metadata path: `x/player/pagelist` only exposes cid/part info. */
+    fun extractVideoMetaFromPagelist(bvid: String, json: String): BiliVideoMeta? {
+        val root = runCatching { mapper.readTree(json) }.getOrNull() ?: return null
+        if (root.path("code").asInt(-1) != 0) return null
+        val first = root.path("data").firstOrNull() ?: return null
+        val cid = first.path("cid").asLong().takeIf { it > 0L } ?: return null
+        return BiliVideoMeta(
+            bvid = bvid,
+            cid = cid,
+            title = first.path("part").asText().trim().ifBlank { null },
+            picUrl = null,
+            ownerName = null,
+            durationSeconds = first.path("duration").asLong().takeIf { it > 0L },
         )
     }
 
@@ -444,4 +591,10 @@ internal object BilibiliUrlDetector {
     }.getOrDefault(false)
 
     fun videoPageUrl(bvid: String): String = "https://www.bilibili.com/video/$bvid"
+
+    private val BVID_REGEX = Regex("BV[0-9A-Za-z]{10}")
+
+    /** Extract the BV-id from any bilibili URL form (canonical, share, b23.tv redirect). */
+    fun extractBvid(url: String): String? =
+        BVID_REGEX.find(url)?.value?.takeIf { it.startsWith("BV") }
 }

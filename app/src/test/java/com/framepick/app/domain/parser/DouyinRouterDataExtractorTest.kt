@@ -201,4 +201,75 @@ class DouyinRouterDataExtractorTest {
 
         assertNull(result)
     }
+
+    @Test
+    fun extractsPlayAddrOnlyVideoFromRealNotePageKey() {
+        val result = DouyinRouterDataExtractor.extract(
+            sourceUrl = "https://v.douyin.com/XZlZlk46Tgw/",
+            finalUrl = "https://www.iesdouyin.com/share/video/7680161183844532879/",
+            html = """
+                <script>window._ROUTER_DATA = {
+                  "loaderData": {
+                    "video_(id)/page": {
+                      "videoInfoRes": {
+                        "item_list": [{
+                          "aweme_id": "7680161183844532879",
+                          "aweme_type": 4,
+                          "desc": "公开视频",
+                          "author": {"nickname": "公开作者"},
+                          "video": {
+                            "play_addr": {
+                              "url_list": ["https://aweme.snssdk.com/aweme/v1/playwm/?video_id=v0300&ratio=540p"]
+                            },
+                            "bit_rate": [],
+                            "width": 1080,
+                            "height": 1920,
+                            "duration": 15000,
+                            "cover": {"url_list": ["https://image.example/cover.jpeg"]}
+                          }
+                        }]
+                      }
+                    }
+                  }
+                };</script>
+            """.trimIndent(),
+        )
+
+        requireNotNull(result)
+        val video = result.items.first { it.type == MediaType.VIDEO }
+        assertEquals(SourceWatermark.CLEAN, video.sourceWatermark)
+        assertTrue(video.mediaUrl.contains("/aweme/v1/play/"))
+        assertFalse(video.mediaUrl.contains("playwm"))
+        assertTrue(video.mediaUrl.contains("ratio=720p"))
+        assertTrue(video.allowWatermarkedDownload)
+    }
+
+    @Test
+    fun shareTargetPrefersNotePageForPhotoStyleLinks() {
+        val note = DouyinShareTarget.from("https://www.iesdouyin.com/share/note/7647443132754138597/")
+        requireNotNull(note)
+        assertEquals("7647443132754138597", note.awemeId)
+        assertEquals(
+            listOf(
+                "https://www.iesdouyin.com/share/note/7647443132754138597/",
+                "https://www.iesdouyin.com/share/video/7647443132754138597/",
+            ),
+            note.candidateUrls(),
+        )
+
+        val video = DouyinShareTarget.from("https://www.iesdouyin.com/share/video/7680161183844532879/")
+        requireNotNull(video)
+        assertEquals(
+            listOf(
+                "https://www.iesdouyin.com/share/video/7680161183844532879/",
+                "https://www.iesdouyin.com/share/note/7680161183844532879/",
+            ),
+            video.candidateUrls(),
+        )
+
+        assertEquals("7680161183844532879", DouyinShareTarget.from("https://www.douyin.com/?modal_id=7680161183844532879")?.awemeId)
+        assertEquals("7647443132754138597", DouyinShareTarget.from("https://www.iesdouyin.com/share/slides/7647443132754138597/")?.awemeId)
+        assertNull(DouyinShareTarget.from("https://v.douyin.com/XZlZlk46Tgw/"))
+        assertNull(DouyinShareTarget.from(null))
+    }
 }
