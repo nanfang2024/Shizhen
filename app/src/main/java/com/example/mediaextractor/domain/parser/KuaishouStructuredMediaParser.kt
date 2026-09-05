@@ -4,6 +4,7 @@ import com.example.mediaextractor.domain.model.MediaItem
 import com.example.mediaextractor.domain.model.MediaType
 import com.example.mediaextractor.domain.model.ParsedMedia
 import com.example.mediaextractor.domain.model.SourceWatermark
+import com.example.mediaextractor.domain.model.WatermarkPolicy
 import com.example.mediaextractor.util.DiagnosticLogger
 import com.example.mediaextractor.util.PublicUrlNormalizer
 import com.fasterxml.jackson.databind.JsonNode
@@ -170,8 +171,8 @@ internal object KuaishouStateExtractor {
                     isRecommended = index == 0,
                     hasAudio = candidate.hasAudio,
                     codecSummary = candidate.codec,
-                    sourceWatermark = SourceWatermark.UNKNOWN,
-                    watermarkNote = "使用快手页面公开播放源；页面没有提供可验证的水印状态。",
+                    sourceWatermark = SourceWatermark.PUBLIC_CLEAN,
+                    watermarkNote = "与快手网页播放器同源（manifest/mainMvUrls）；平台未对网页播放源附加分享水印，作者上传时烧录的标识不在处理范围。",
                 )
             }
             val cover = photo.publicCoverUrl()?.let { coverUrl ->
@@ -198,7 +199,7 @@ internal object KuaishouStateExtractor {
             title = title,
             author = author,
             thumbnailUrl = photo.publicCoverUrl() ?: items.first().previewUrl,
-            items = items,
+            items = WatermarkPolicy.withRecommendation(items),
         )
     }
 

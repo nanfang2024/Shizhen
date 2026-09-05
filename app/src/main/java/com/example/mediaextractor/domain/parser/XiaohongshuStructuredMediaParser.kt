@@ -4,6 +4,7 @@ import com.example.mediaextractor.domain.model.MediaItem
 import com.example.mediaextractor.domain.model.MediaType
 import com.example.mediaextractor.domain.model.ParsedMedia
 import com.example.mediaextractor.domain.model.SourceWatermark
+import com.example.mediaextractor.domain.model.WatermarkPolicy
 import com.example.mediaextractor.util.DiagnosticLogger
 import com.example.mediaextractor.util.PublicUrlNormalizer
 import com.fasterxml.jackson.databind.JsonNode
@@ -292,7 +293,7 @@ internal object XiaohongshuStateExtractor {
             title = title,
             author = author,
             thumbnailUrl = imageCandidates.firstOrNull()?.url,
-            items = items,
+            items = WatermarkPolicy.withRecommendation(items),
         )
     }
 

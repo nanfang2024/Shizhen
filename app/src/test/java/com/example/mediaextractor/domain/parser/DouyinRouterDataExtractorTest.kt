@@ -128,6 +128,57 @@ class DouyinRouterDataExtractorTest {
     }
 
     @Test
+    fun returnsWatermarkedItemsWhenOnlyPlaywmEndpointsSurviveRewrite() {
+        val result = DouyinRouterDataExtractor.extract(
+            sourceUrl = "https://v.douyin.com/watermarked-example/",
+            finalUrl = "https://www.iesdouyin.com/share/video/789/",
+            html = """
+                <script>window._ROUTER_DATA = {
+                  "loaderData": {
+                    "video_page": {
+                      "videoInfoRes": {
+                        "item_list": [{
+                          "aweme_id": "789",
+                          "desc": "仅带水印视频",
+                          "author": {"nickname": "测试作者"},
+                          "images": [],
+                          "video": {
+                            "width": 1080,
+                            "height": 1920,
+                            "duration": 30100,
+                            "play_addr": {
+                              "uri": "video-id",
+                              "url_list": [
+                                "https://aweme.snssdk.com/aweme/v1/playwm/?video_id=video-id&ratio=1080p&watermark=1&from=playwm_share"
+                              ]
+                            },
+                            "cover": {
+                              "width": 720,
+                              "height": 1280,
+                              "url_list": ["https://image.example/cover.webp"]
+                            }
+                          }
+                        }]
+                      }
+                    }
+                  }
+                };</script>
+            """.trimIndent(),
+        )
+
+        requireNotNull(result)
+        val videos = result.items.filter { it.type == MediaType.VIDEO }
+        assertEquals(1, videos.size)
+        val video = videos.first()
+        assertEquals(SourceWatermark.WATERMARKED, video.sourceWatermark)
+        assertTrue(video.mediaUrl.contains("playwm"))
+        assertTrue(video.qualityLabel!!.contains("带水印"))
+        assertEquals("公开页面仅提供带水印播放源；已禁用下载，可预览确认。", video.watermarkNote)
+        assertFalse(video.allowWatermarkedDownload)
+        assertEquals(MediaType.COVER, result.items.last().type)
+    }
+
+    @Test
     fun doesNotTreatPhotoPostBackgroundMusicAsVideo() {
         val result = DouyinRouterDataExtractor.extract(
             sourceUrl = "https://v.douyin.com/example/",

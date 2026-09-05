@@ -71,7 +71,7 @@ verify:
   - type: shell
     command: git status --short
 
-- [ ] **Step 10: 提交并请求人工审查**
+- [x] **Step 10: 提交并请求人工审查**
 action: 在分支 hotl/phase-1-pipixia-bilibili-parsers 上提交全部 Phase 1 变更（含 docs/ 下设计文档），commit 信息：`Phase 1: add pipixia & bilibili structured parsers`。向用户汇总：新增/修改文件清单、测试结果（含新增用例数）、验收三连输出状态、Step 4 样本抓取是否降级。请用户审查并确认是否进入 Phase 2（无水印策略增强）。
 loop: false
 gate: human

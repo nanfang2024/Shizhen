@@ -53,8 +53,10 @@ class KuaishouStateExtractorTest {
         assertEquals(1080, result.items[0].width)
         assertEquals("https://video.ndcimgs.com/1080.mp4", result.items[0].mediaUrl)
         assertTrue(result.items[0].hasAudio == true)
-        assertEquals(SourceWatermark.UNKNOWN, result.items[0].sourceWatermark)
+        assertEquals(SourceWatermark.PUBLIC_CLEAN, result.items[0].sourceWatermark)
+        assertTrue(result.items[0].watermarkNote!!.contains("网页播放器同源"))
         assertEquals(MediaType.COVER, result.items.last().type)
+        assertEquals(SourceWatermark.UNKNOWN, result.items.last().sourceWatermark)
         assertTrue(result.items.last().mediaUrl.startsWith("https://"))
     }
 

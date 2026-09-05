@@ -5,6 +5,7 @@ import com.example.mediaextractor.domain.model.MediaItem
 import com.example.mediaextractor.domain.model.MediaType
 import com.example.mediaextractor.domain.model.ParsedMedia
 import com.example.mediaextractor.domain.model.SourceWatermark
+import com.example.mediaextractor.domain.model.WatermarkPolicy
 import com.example.mediaextractor.util.DiagnosticLogger
 import com.example.mediaextractor.util.PublicUrlNormalizer
 import com.fasterxml.jackson.databind.JsonNode
@@ -135,7 +136,7 @@ class BilibiliStructuredMediaParser(
             title = meta.title,
             author = meta.ownerName,
             thumbnailUrl = meta.picUrl,
-            items = videos + listOfNotNull(cover),
+            items = WatermarkPolicy.withRecommendation(videos + listOfNotNull(cover)),
         )
     }
 
@@ -209,7 +210,7 @@ class BilibiliStructuredMediaParser(
             title = title,
             author = null,
             thumbnailUrl = images.firstOrNull(),
-            items = imageItems,
+            items = WatermarkPolicy.withRecommendation(imageItems),
         )
     }
 

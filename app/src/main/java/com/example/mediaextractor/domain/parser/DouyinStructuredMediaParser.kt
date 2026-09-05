@@ -4,6 +4,7 @@ import com.example.mediaextractor.domain.model.MediaItem
 import com.example.mediaextractor.domain.model.MediaType
 import com.example.mediaextractor.domain.model.ParsedMedia
 import com.example.mediaextractor.domain.model.SourceWatermark
+import com.example.mediaextractor.domain.model.WatermarkPolicy
 import com.example.mediaextractor.util.DiagnosticLogger
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -221,7 +222,7 @@ internal object DouyinRouterDataExtractor {
         } else {
             emptyList()
         }
-        val items = imageItems.ifEmpty { videoItems }
+        val items = WatermarkPolicy.withRecommendation(imageItems.ifEmpty { videoItems })
         if (items.isEmpty()) return null
         return ParsedMedia(
             sourceUrl = sourceUrl,
@@ -301,40 +302,88 @@ internal object DouyinRouterDataExtractor {
                     .thenByDescending { it.bitrate ?: 0L },
             )
 
-        val videos = candidates.mapIndexed { index, candidate ->
-            val resolution = candidate.width?.let { width ->
-                candidate.height?.let { height -> "${width}×$height" }
+        val cleanCandidates = candidates.filterNot(VideoCandidate::watermarked)
+        val watermarkedCandidates = candidates.filter(VideoCandidate::watermarked)
+        val videos = when {
+            cleanCandidates.isNotEmpty() -> cleanCandidates.mapIndexed { index, candidate ->
+                cleanVideoItem(awemeId, pageUrl, candidate, index, sourceWidth, sourceHeight)
             }
-            val sourceResolution = sourceWidth?.let { width ->
-                sourceHeight?.let { height -> "${width}×$height" }
+            watermarkedCandidates.isNotEmpty() -> watermarkedCandidates.mapIndexed { index, candidate ->
+                watermarkedVideoItem(awemeId, pageUrl, candidate, index)
             }
-            MediaItem(
-                id = UUID.nameUUIDFromBytes("$awemeId:video:${candidate.url}".toByteArray()).toString(),
-                type = MediaType.VIDEO,
-                mediaUrl = candidate.url,
-                format = "mp4",
-                width = candidate.width,
-                height = candidate.height,
-                fileSize = candidate.fileSize,
-                qualityLabel = listOfNotNull(resolution, candidate.label, "公开无水印播放源")
-                    .distinct().joinToString(" · "),
-                previewUrl = candidate.url,
-                downloadSourceUrl = pageUrl,
-                isRecommended = index == 0,
-                hasAudio = true,
-                sourceWatermark = SourceWatermark.PUBLIC_CLEAN,
-                watermarkNote = buildString {
-                    append("使用平台公开 /play/ 播放源，已排除页面返回的 /playwm/ 带水印源。")
-                    if (sourceResolution != null && sourceResolution != resolution) {
-                        append(" 页面标称作品尺寸为 $sourceResolution，但公开文件只验证到 ${resolution ?: candidate.label}，不会虚报为原画。")
-                    }
-                },
-            )
+            else -> emptyList()
         }
         if (videos.isEmpty()) return emptyList()
 
         val cover = video.path("cover").toCoverItem(awemeId, pageUrl)
         return videos + listOfNotNull(cover)
+    }
+
+    private fun cleanVideoItem(
+        awemeId: String,
+        pageUrl: String,
+        candidate: VideoCandidate,
+        index: Int,
+        sourceWidth: Int?,
+        sourceHeight: Int?,
+    ): MediaItem {
+        val resolution = candidate.width?.let { width ->
+            candidate.height?.let { height -> "${width}×$height" }
+        }
+        val sourceResolution = sourceWidth?.let { width ->
+            sourceHeight?.let { height -> "${width}×$height" }
+        }
+        return MediaItem(
+            id = UUID.nameUUIDFromBytes("$awemeId:video:${candidate.url}".toByteArray()).toString(),
+            type = MediaType.VIDEO,
+            mediaUrl = candidate.url,
+            format = "mp4",
+            width = candidate.width,
+            height = candidate.height,
+            fileSize = candidate.fileSize,
+            qualityLabel = listOfNotNull(resolution, candidate.label, "公开无水印播放源")
+                .distinct().joinToString(" · "),
+            previewUrl = candidate.url,
+            downloadSourceUrl = pageUrl,
+            isRecommended = index == 0,
+            hasAudio = true,
+            sourceWatermark = SourceWatermark.PUBLIC_CLEAN,
+            watermarkNote = buildString {
+                append("使用平台公开 /play/ 播放源，已排除页面返回的 /playwm/ 带水印源。")
+                if (sourceResolution != null && sourceResolution != resolution) {
+                    append(" 页面标称作品尺寸为 $sourceResolution，但公开文件只验证到 ${resolution ?: candidate.label}，不会虚报为原画。")
+                }
+            },
+        )
+    }
+
+    /** Degraded result when the public page only offers watermarked playback. */
+    private fun watermarkedVideoItem(
+        awemeId: String,
+        pageUrl: String,
+        candidate: VideoCandidate,
+        index: Int,
+    ): MediaItem {
+        val resolution = candidate.width?.let { width ->
+            candidate.height?.let { height -> "${width}×$height" }
+        }
+        return MediaItem(
+            id = UUID.nameUUIDFromBytes("$awemeId:video:${candidate.url}".toByteArray()).toString(),
+            type = MediaType.VIDEO,
+            mediaUrl = candidate.url,
+            format = "mp4",
+            width = candidate.width,
+            height = candidate.height,
+            fileSize = candidate.fileSize,
+            qualityLabel = listOfNotNull(resolution, candidate.label, "带水印")
+                .distinct().joinToString(" · "),
+            previewUrl = candidate.url,
+            downloadSourceUrl = pageUrl,
+            isRecommended = index == 0,
+            hasAudio = true,
+            sourceWatermark = SourceWatermark.WATERMARKED,
+            watermarkNote = "公开页面仅提供带水印播放源；已禁用下载，可预览确认。",
+        )
     }
 
     private fun JsonNode.toCleanVideoCandidate(
@@ -352,6 +401,8 @@ internal object DouyinRouterDataExtractor {
             encodedPath.endsWith("/play", ignoreCase = true)
         if (!wasWatermarkedEndpoint && !isCleanEndpoint) return null
 
+        val addressWidth = path("width").asInt().takeIf { it > 0 }
+        val addressHeight = path("height").asInt().takeIf { it > 0 }
         val cleanUrl = parsed.newBuilder().apply {
             if (wasWatermarkedEndpoint) {
                 encodedPath(
@@ -362,10 +413,21 @@ internal object DouyinRouterDataExtractor {
                 removeAllQueryParameters("watermark")
             }
         }.build().toString()
-        if (cleanUrl.contains("playwm", ignoreCase = true)) return null
+        if (cleanUrl.contains("playwm", ignoreCase = true)) {
+            // The rewrite could not fully drop the watermarked marker; keep the
+            // raw endpoint as a degraded candidate instead of silently dropping
+            // it. The WATERMARKED label keeps downloads blocked in the UI.
+            return VideoCandidate(
+                url = rawUrl,
+                label = label,
+                width = addressWidth,
+                height = addressHeight,
+                fileSize = path("data_size").asLong().takeIf { it > 0 },
+                bitrate = bitrate,
+                watermarked = true,
+            )
+        }
 
-        val addressWidth = path("width").asInt().takeIf { it > 0 }
-        val addressHeight = path("height").asInt().takeIf { it > 0 }
         val (width, height) = if (wasWatermarkedEndpoint) {
             fitPublic720(sourceWidth, sourceHeight)
         } else {
@@ -432,6 +494,7 @@ internal object DouyinRouterDataExtractor {
         val height: Int?,
         val fileSize: Long?,
         val bitrate: Long?,
+        val watermarked: Boolean = false,
     )
 
     private const val PUBLIC_SHORT_EDGE = 720
