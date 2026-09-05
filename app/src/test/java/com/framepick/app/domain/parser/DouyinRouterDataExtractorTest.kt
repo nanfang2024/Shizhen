@@ -237,11 +237,12 @@ class DouyinRouterDataExtractorTest {
 
         requireNotNull(result)
         val video = result.items.first { it.type == MediaType.VIDEO }
-        assertEquals(SourceWatermark.CLEAN, video.sourceWatermark)
+        assertEquals(SourceWatermark.PUBLIC_CLEAN, video.sourceWatermark)
         assertTrue(video.mediaUrl.contains("/aweme/v1/play/"))
         assertFalse(video.mediaUrl.contains("playwm"))
         assertTrue(video.mediaUrl.contains("ratio=720p"))
-        assertTrue(video.allowWatermarkedDownload)
+        assertFalse(video.isPreviewOnly)
+        assertTrue(video.qualityLabel!!.contains("公开无水印播放源"))
     }
 
     @Test
