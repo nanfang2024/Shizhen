@@ -84,6 +84,7 @@ class WorkManagerDownloadRepository(
         val inputData = Data.Builder()
             .putString(MediaDownloadWorker.KEY_MEDIA_URL, item.mediaUrl)
             .putString(MediaDownloadWorker.KEY_SOURCE_URL, item.downloadSourceUrl)
+            .putString(MediaDownloadWorker.KEY_BACKUP_URL, item.backupUrl)
             .putString(MediaDownloadWorker.KEY_DOWNLOAD_STRATEGY, item.downloadStrategy.name)
             .putString(MediaDownloadWorker.KEY_FORMAT_SELECTOR, item.formatSelector)
             .putString(MediaDownloadWorker.KEY_MEDIA_TYPE, item.type.name)

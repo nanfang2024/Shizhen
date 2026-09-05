@@ -260,6 +260,46 @@ class BilibiliStateExtractorTest {
     }
 
     @Test
+    fun buildQualityItemsKeepsBackupUrlAndLabelsSegments() {
+        val pageUrl = "https://www.bilibili.com/video/BV1Xyt76VEnk"
+        val single = BilibiliStateExtractor.buildQualityItems(
+            pageUrl,
+            """
+            {"code":0,"data":{"quality":64,"durl":[
+              {"url":"https://cn.bilivideo.com/a.mp4?e=1","backup_url":["https://mirror.bilivideo.com/a.mp4?e=1"],"size":124874790,"length":1373277}
+            ]}}
+            """.trimIndent(),
+        )
+        requireNotNull(single)
+        assertEquals(1, single.size)
+        assertEquals("https://mirror.bilivideo.com/a.mp4?e=1", single.first().backupUrl)
+        assertEquals("720P 高清 · 匿名公开档位", single.first().qualityLabel)
+        assertEquals(124874790L, single.first().fileSize)
+
+        val multi = BilibiliStateExtractor.buildQualityItems(
+            pageUrl,
+            """
+            {"code":0,"data":{"quality":64,"durl":[
+              {"url":"https://cn.bilivideo.com/p1.mp4","size":1},
+              {"url":"https://cn.bilivideo.com/p2.mp4","size":2}
+            ]}}
+            """.trimIndent(),
+        )
+        requireNotNull(multi)
+        assertEquals(2, multi.size)
+        assertEquals("720P 高清 · 匿名公开档位 · 第1/2段", multi[0].qualityLabel)
+        assertEquals("720P 高清 · 匿名公开档位 · 第2/2段", multi[1].qualityLabel)
+        assertEquals(pageUrl, multi[0].downloadSourceUrl)
+
+        assertNull(
+            BilibiliStateExtractor.buildQualityItems(
+                pageUrl,
+                """{"code":-404,"data":{"durl":[]}}""",
+            ),
+        )
+    }
+
+    @Test
     fun extractsBvidFromEveryKnownUrlForm() {
         assertEquals("BV1Xyt76VEnk", BilibiliUrlDetector.extractBvid("https://www.bilibili.com/video/BV1Xyt76VEnk/"))
         assertEquals("BV1Xyt76VEnk", BilibiliUrlDetector.extractBvid("https://www.bilibili.com/video/BV1Xyt76VEnk?p=2&spm_id_from=333"))

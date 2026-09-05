@@ -94,6 +94,7 @@ import com.framepick.app.ui.components.WarmAccentBadge
 import com.framepick.app.ui.components.WarmSurfaceCard
 import com.framepick.app.ui.theme.extendedColors
 import com.framepick.app.util.DiagnosticLogger
+import java.net.URI
 import java.util.Locale
 
 @Composable
@@ -739,11 +740,13 @@ private fun StreamPreviewControl(
     buttonText: String,
     onTogglePreview: () -> Unit,
     previewHeight: Dp = 220.dp,
+    referer: String? = null,
 ) {
     if (isPreviewing && previewUrl != null) {
         StreamingPreview(
             url = previewUrl,
             modifier = Modifier.fillMaxWidth().height(previewHeight).clip(RoundedCornerShape(14.dp)),
+            referer = referer,
         )
     } else if (fallbackThumbnail != null) {
         AsyncImage(
@@ -774,7 +777,11 @@ private fun StreamPreviewControl(
 }
 
 @Composable
-private fun StreamingPreview(url: String, modifier: Modifier = Modifier) {
+private fun StreamingPreview(
+    url: String,
+    modifier: Modifier = Modifier,
+    referer: String? = null,
+) {
     val context = LocalContext.current
     var errorMessage by remember(url) { mutableStateOf<String?>(null) }
     val videoView = remember(url) {
@@ -808,7 +815,19 @@ private fun StreamingPreview(url: String, modifier: Modifier = Modifier) {
             errorMessage = "这个临时媒体流无法在线播放，可尝试推荐版本或下载后打开。"
             true
         }
-        videoView.setVideoURI(url.toUri(), mapOf("User-Agent" to STREAM_PREVIEW_USER_AGENT))
+        videoView.setVideoURI(
+            url.toUri(),
+            buildMap {
+                put("User-Agent", STREAM_PREVIEW_USER_AGENT)
+                val validReferer = referer?.takeIf { source ->
+                    runCatching {
+                        val uri = URI(source)
+                        (uri.scheme == "https" || uri.scheme == "http") && !uri.host.isNullOrBlank()
+                    }.getOrDefault(false)
+                }
+                validReferer?.let { put("Referer", it) }
+            },
+        )
         onDispose {
             videoView.stopPlayback()
             videoView.setOnPreparedListener(null)

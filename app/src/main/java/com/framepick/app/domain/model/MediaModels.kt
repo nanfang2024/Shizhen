@@ -30,6 +30,7 @@ data class MediaItem(
     val allowWatermarkedDownload: Boolean = false,
     val previewAsVideo: Boolean = false,
     val isPreviewOnly: Boolean = false,
+    val backupUrl: String? = null,
 )
 
 enum class DownloadStrategy {

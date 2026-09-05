@@ -106,6 +106,14 @@ class FramePickApplication : Application(), ImageLoaderFactory {
             .build()
     }
 
+    /** callTimeout covers the whole body transfer; large video downloads must not reuse the 45s parser client. */
+    val downloadHttpClient: OkHttpClient by lazy {
+        httpClient.newBuilder()
+            .readTimeout(60, TimeUnit.SECONDS)
+            .callTimeout(0, TimeUnit.SECONDS)
+            .build()
+    }
+
     val parserRegistry: ParserRegistry by lazy {
         ParserRegistry(
             listOf(

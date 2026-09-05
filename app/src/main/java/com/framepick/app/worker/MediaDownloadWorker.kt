@@ -56,6 +56,7 @@ class MediaDownloadWorker(
                 return failure("下载地址无效。")
             }
         val sourceUrl = inputData.getString(KEY_SOURCE_URL) ?: mediaUrl
+        val backupUrl = inputData.getString(KEY_BACKUP_URL)
         val historyId = inputData.getLong(KEY_HISTORY_ID, -1L)
         val itemId = inputData.getString(KEY_ITEM_ID).orEmpty()
         val format = inputData.getString(KEY_FORMAT)
@@ -94,6 +95,7 @@ class MediaDownloadWorker(
                     mediaType = mediaType,
                     title = title,
                     itemId = itemId,
+                    backupUrl = backupUrl,
                 )
                 DownloadStrategy.DIRECT_AUDIO -> downloadDirectAudio(
                     url = mediaUrl,
@@ -207,6 +209,29 @@ class MediaDownloadWorker(
         mediaType: String,
         title: String?,
         itemId: String,
+        backupUrl: String? = null,
+    ): OutputDestination {
+        return try {
+            performDirectTransfer(url, sourceUrl, format, mediaType, title, itemId)
+        } catch (failure: DirectForbiddenException) {
+            if (backupUrl.isNullOrBlank() || backupUrl == url) throw accessRestricted()
+            DiagnosticLogger.warning(
+                category = "DOWNLOAD_DIRECT",
+                event = "primary_forbidden_switching_backup",
+                failure = failure,
+                details = mapOf("backupUrl" to backupUrl),
+            )
+            performDirectTransfer(backupUrl, sourceUrl, format, mediaType, title, itemId)
+        }
+    }
+
+    private suspend fun performDirectTransfer(
+        url: String,
+        sourceUrl: String?,
+        format: String?,
+        mediaType: String,
+        title: String?,
+        itemId: String,
     ): OutputDestination {
         val request = Request.Builder()
                 .url(url)
@@ -223,7 +248,7 @@ class MediaDownloadWorker(
                 }
                 .get()
                 .build()
-        val response = app.httpClient.newCall(request).execute()
+        val response = app.downloadHttpClient.newCall(request).execute()
 
         response.use {
             DiagnosticLogger.info(
@@ -283,7 +308,7 @@ class MediaDownloadWorker(
         if (!taskDirectory.mkdirs()) throw DownloadException("无法创建音频提取缓存目录。")
 
         try {
-            val response = app.httpClient.newCall(
+            val response = app.downloadHttpClient.newCall(
                 Request.Builder()
                     .url(url)
                     .header("User-Agent", BROWSER_USER_AGENT)
@@ -967,9 +992,12 @@ class MediaDownloadWorker(
 
     private class DownloadException(message: String) : IOException(message)
 
+    private class DirectForbiddenException : IOException("CDN direct link returned 401/403")
+
     companion object {
         const val KEY_MEDIA_URL = "media_url"
         const val KEY_SOURCE_URL = "source_url"
+        const val KEY_BACKUP_URL = "backup_url"
         const val KEY_DOWNLOAD_STRATEGY = "download_strategy"
         const val KEY_FORMAT_SELECTOR = "format_selector"
         const val KEY_MEDIA_TYPE = "media_type"
