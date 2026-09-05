@@ -261,7 +261,7 @@ class MediaDownloadWorker(
                     "finalUrl" to it.request.url,
                 ),
             )
-            if (it.code == 401 || it.code == 403) throw accessRestricted()
+            if (it.code == 401 || it.code == 403) throw DirectForbiddenException()
             if (!it.isSuccessful) {
                 throw DownloadException("下载失败，服务器返回状态 ${it.code}。")
             }

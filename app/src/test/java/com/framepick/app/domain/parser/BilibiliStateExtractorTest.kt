@@ -301,6 +301,38 @@ class BilibiliStateExtractorTest {
     }
 
     @Test
+    fun buildQualityItemsPrefersOfficialCdnOverP2pEdge() {
+        val pageUrl = "https://www.bilibili.com/video/BV1Xyt76VEnk"
+        val items = BilibiliStateExtractor.buildQualityItems(
+            pageUrl,
+            """
+            {"code":0,"data":{"quality":64,"durl":[
+              {"url":"https://ize3261c.edge.mountaintoys.cn/upgcxcode/v.mp4?e=1",
+               "backup_url":["https://upos-sz-mirrorhw.bilivideo.com/v.mp4?e=1",
+                             "https://cn-gdfs-cc-02-21.bilivideo.com/v.mp4?e=1"]}
+            ]}}
+            """.trimIndent(),
+        )
+        requireNotNull(items)
+        assertEquals(1, items.size)
+        assertEquals("https://upos-sz-mirrorhw.bilivideo.com/v.mp4?e=1", items.first().mediaUrl)
+        assertEquals("https://cn-gdfs-cc-02-21.bilivideo.com/v.mp4?e=1", items.first().backupUrl)
+
+        val allOfficial = BilibiliStateExtractor.buildQualityItems(
+            pageUrl,
+            """
+            {"code":0,"data":{"quality":64,"durl":[
+              {"url":"https://cn-gdfs-cc-02-21.bilivideo.com/a.mp4?e=1",
+               "backup_url":["https://upos-sz-mirrorhw.bilivideo.com/a.mp4?e=1"]}
+            ]}}
+            """.trimIndent(),
+        )
+        requireNotNull(allOfficial)
+        assertEquals("https://cn-gdfs-cc-02-21.bilivideo.com/a.mp4?e=1", allOfficial.first().mediaUrl)
+        assertEquals("https://upos-sz-mirrorhw.bilivideo.com/a.mp4?e=1", allOfficial.first().backupUrl)
+    }
+
+    @Test
     fun extractsBvidFromEveryKnownUrlForm() {
         assertEquals("BV1Xyt76VEnk", BilibiliUrlDetector.extractBvid("https://www.bilibili.com/video/BV1Xyt76VEnk/"))
         assertEquals("BV1Xyt76VEnk", BilibiliUrlDetector.extractBvid("https://www.bilibili.com/video/BV1Xyt76VEnk?p=2&spm_id_from=333"))

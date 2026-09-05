@@ -11,6 +11,7 @@ import com.framepick.app.util.PublicUrlNormalizer
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import java.io.IOException
+import java.net.URI
 import java.util.Locale
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
@@ -467,11 +468,15 @@ internal object BilibiliStateExtractor {
         val label = qualityLabel(quality)
         val totalSegments = data.path("durl").size()
         return data.path("durl").asSequence().mapIndexedNotNull { segmentIndex, segment ->
-            val url = segment.path("url").asText().toPublicUrl() ?: return@mapIndexedNotNull null
-            val backupUrl = segment.path("backup_url").asSequence()
-                .map(JsonNode::asText)
+            val orderedUrls = (sequenceOf(segment.path("url").asText()) +
+                segment.path("backup_url").asSequence().map(JsonNode::asText))
                 .map { it.toPublicUrl() }
-                .firstOrNull()
+                .filterNotNull()
+                .distinct()
+                .sortedBy(::cdnRank)
+                .toList()
+            val url = orderedUrls.firstOrNull() ?: return@mapIndexedNotNull null
+            val backupUrl = orderedUrls.firstOrNull { it != url }
             val segmentSuffix = if (totalSegments > 1) " · 第${segmentIndex + 1}/${totalSegments}段" else ""
             MediaItem(
                 id = stableId("bilibili:$videoPageUrl:$quality:$url"),
@@ -493,6 +498,20 @@ internal object BilibiliStateExtractor {
                 sourceWatermark = SourceWatermark.PUBLIC_CLEAN,
             )
         }.distinctBy(MediaItem::mediaUrl).toList()
+    }
+
+    /**
+     * Ranks Bilibili CDN candidates: official UPoS mirrors first,
+     * Akamai mirror next, P2P edge nodes (often rejecting plain clients) last.
+     */
+    private fun cdnRank(url: String): Int {
+        val host = runCatching { URI(url).host?.lowercase() }.getOrNull() ?: return 3
+        return when {
+            host == "bilivideo.com" || host.endsWith(".bilivideo.com") -> 0
+            host.endsWith(".akamaized.net") -> 1
+            host.endsWith(".bilivideo.cn") -> 2
+            else -> 3
+        }
     }
 
     /** Reads the effective quality code of an anonymous playurl response. */
