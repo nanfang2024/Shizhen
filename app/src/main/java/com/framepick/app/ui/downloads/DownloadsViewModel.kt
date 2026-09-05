@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.work.WorkInfo
 import com.framepick.app.FramePickApplication
 import com.framepick.app.data.download.DownloadTask
+import com.framepick.app.data.repository.HistoryRecord
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,10 +15,12 @@ import kotlinx.coroutines.launch
 
 data class DownloadsUiState(
     val tasks: List<DownloadTask> = emptyList(),
+    val records: List<HistoryRecord> = emptyList(),
 )
 
 class DownloadsViewModel(application: Application) : AndroidViewModel(application) {
     private val downloadRepository = getApplication<FramePickApplication>().downloadRepository
+    private val historyRepository = getApplication<FramePickApplication>().historyRepository
     private val _uiState = MutableStateFlow(DownloadsUiState())
     val uiState: StateFlow<DownloadsUiState> = _uiState.asStateFlow()
 
@@ -33,6 +36,11 @@ class DownloadsViewModel(application: Application) : AndroidViewModel(applicatio
                 _uiState.update { it.copy(tasks = active + finished) }
             }
         }
+        viewModelScope.launch {
+            historyRepository.observeAll().collect { records ->
+                _uiState.update { it.copy(records = records) }
+            }
+        }
     }
 
     fun cancel(task: DownloadTask) {
@@ -41,5 +49,13 @@ class DownloadsViewModel(application: Application) : AndroidViewModel(applicatio
             task.state != WorkInfo.State.BLOCKED
         ) return
         downloadRepository.cancel(task.workId)
+    }
+
+    fun delete(id: Long) {
+        viewModelScope.launch { historyRepository.delete(id) }
+    }
+
+    fun clearHistory() {
+        viewModelScope.launch { historyRepository.clearAll() }
     }
 }
