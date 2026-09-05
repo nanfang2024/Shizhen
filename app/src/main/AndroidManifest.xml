@@ -11,18 +11,18 @@
         tools:ignore="SystemPermissionTypo" />
 
     <application
-        android:name=".MediaExtractorApplication"
+        android:name=".FramePickApplication"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.MediaExtractorDemo">
+        android:theme="@style/Theme.FramePick">
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
-            android:theme="@style/Theme.MediaExtractorDemo.Starting">
+            android:theme="@style/Theme.FramePick.Starting">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

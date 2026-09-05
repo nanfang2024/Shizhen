@@ -57,7 +57,7 @@ verify:
   - type: shell
     command: git status --short
 
-- [ ] **Step 7: 提交并请求人工审查**
+- [x] **Step 7: 提交并请求人工审查**
 action: 在分支 hotl/phase-2-watermark-enhancement 上提交全部 Phase 2 变更（含 docs/ 下设计文档与工作流），commit 信息：`Phase 2: unify watermark source policy across structured parsers`。向用户汇总：新增/修改文件清单、测试结果（新增用例数）、验收三连状态、快手 PUBLIC_CLEAN 标注依据与抖音降级返回行为。请用户审查并确认是否进入 Phase 3（UI 三 Tab + 品牌迁移）。
 loop: false
 gate: human

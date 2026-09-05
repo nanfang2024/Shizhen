@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">拾帧</string>
-    <string name="brand_tagline">拾取精彩，转换随心</string>
+    <string name="app_name">拾光无痕</string>
+    <string name="brand_tagline">拾取光影，不留痕迹</string>
     <string name="nav_extractor">链接提取</string>
     <string name="nav_converter">格式转换</string>
     <string name="nav_history">历史记录</string>

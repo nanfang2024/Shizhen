@@ -23,21 +23,21 @@ if (hasReleaseSigning) {
 }
 
 android {
-    namespace = "com.example.mediaextractor"
+    namespace = "com.framepick.app"
     compileSdk {
         version = release(34)
     }
 
     defaultConfig {
-        applicationId = "com.example.mediaextractor"
+        applicationId = "com.framepick.app"
         minSdk {
             version = release(26)
         }
         targetSdk {
             version = release(34)
         }
-        versionCode = 23
-        versionName = "1.0.9"
+        versionCode = 1
+        versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
