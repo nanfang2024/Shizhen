@@ -57,7 +57,6 @@ class MediaDownloadWorker(
             }
         val sourceUrl = inputData.getString(KEY_SOURCE_URL) ?: mediaUrl
         val backupUrl = inputData.getString(KEY_BACKUP_URL)
-        val companionUrl = inputData.getString(KEY_COMPANION_URL)
         val historyId = inputData.getLong(KEY_HISTORY_ID, -1L)
         val itemId = inputData.getString(KEY_ITEM_ID).orEmpty()
         val format = inputData.getString(KEY_FORMAT)
@@ -101,15 +100,6 @@ class MediaDownloadWorker(
                 DownloadStrategy.DIRECT_AUDIO -> downloadDirectAudio(
                     url = mediaUrl,
                     sourceUrl = sourceUrl,
-                    title = title,
-                    itemId = itemId,
-                )
-                DownloadStrategy.DIRECT_MERGED -> downloadMerged(
-                    videoUrl = mediaUrl,
-                    audioUrl = companionUrl.orEmpty(),
-                    sourceUrl = sourceUrl,
-                    format = format,
-                    mediaType = mediaType,
                     title = title,
                     itemId = itemId,
                 )
@@ -425,140 +415,6 @@ class MediaDownloadWorker(
             return destination
         } finally {
             taskDirectory.deleteRecursively()
-        }
-    }
-
-    /**
-     * 分离流合并下载（YouTube 1080p~4K）：分别取得视频轨与音频轨两条直链后，
-     * 用内置 FFmpeg `-c copy` 在设备本地无损封装，不重新编码、不引入转码水印。
-     */
-    private suspend fun downloadMerged(
-        videoUrl: String,
-        audioUrl: String,
-        sourceUrl: String,
-        format: String?,
-        mediaType: String,
-        title: String?,
-        itemId: String,
-    ): OutputDestination {
-        if (audioUrl.isBlank()) {
-            throw DownloadException("该清晰度缺少配套音轨，无法完成本地无损封装。")
-        }
-        ensureEnoughSpace(
-            inputData.getLong(KEY_EXPECTED_SIZE, -1L).takeIf { it > 0 },
-            applicationContext.cacheDir,
-            MIN_CACHE_FREE_BYTES,
-        )
-        val taskDirectory = File(applicationContext.cacheDir, "merged_downloads/$id")
-        if (taskDirectory.exists()) taskDirectory.deleteRecursively()
-        if (!taskDirectory.mkdirs()) throw DownloadException("无法创建合并下载缓存目录。")
-
-        try {
-            val extension = format?.lowercase(Locale.ROOT)?.trim('.')
-                ?.takeIf { it in MEDIA_EXTENSIONS } ?: "mp4"
-            val videoFile = File(taskDirectory, "video.$extension")
-            val audioFile = File(taskDirectory, "audio.bin")
-
-            setForeground(createForegroundInfo(2, "正在下载视频轨"))
-            fetchStreamToFile(videoUrl, videoFile, sourceUrl, 2, 58)
-            setForeground(createForegroundInfo(58, "正在下载音轨"))
-            fetchStreamToFile(audioUrl, audioFile, sourceUrl, 58, 74)
-
-            setProgress(workDataOf(KEY_PROGRESS to 76))
-            setForeground(createForegroundInfo(76, "正在本地无损封装音视频"))
-            val outputFile = File(taskDirectory, "merged.$extension")
-            val arguments = buildList {
-                add("-i"); add(videoFile.absolutePath)
-                add("-i"); add(audioFile.absolutePath)
-                add("-map"); add("0:v:0")
-                add("-map"); add("1:a:0")
-                add("-c"); add("copy")
-                if (extension == "mp4") {
-                    add("-movflags"); add("+faststart")
-                }
-                add(outputFile.absolutePath)
-            }
-            runBundledFfmpeg(arguments)
-            if (!outputFile.isFile || outputFile.length() == 0L) {
-                throw DownloadException("FFmpeg 没有生成有效的合并媒体文件。")
-            }
-            DiagnosticLogger.info(
-                category = "DOWNLOAD_MERGED",
-                event = "merge_succeeded",
-                details = mapOf(
-                    "videoBytes" to videoFile.length(),
-                    "audioBytes" to audioFile.length(),
-                    "outputBytes" to outputFile.length(),
-                    "extension" to extension,
-                ),
-            )
-            ensureEnoughSpace(outputFile.length(), outputStoragePath(), MIN_OUTPUT_FREE_BYTES)
-            setProgress(workDataOf(KEY_PROGRESS to 92))
-            val displayName = safeFileName(title, itemId, extension)
-            val destination = createDestination(
-                displayName,
-                DownloadMimePolicy.fallback(mediaType, extension),
-            )
-            createdOutput = destination
-            destination.outputStream.use { target ->
-                outputFile.inputStream().use { input ->
-                    copyWithProgress(input, target, outputFile.length(), 92, 99)
-                }
-            }
-            return destination
-        } finally {
-            taskDirectory.deleteRecursively()
-        }
-    }
-
-    private suspend fun fetchStreamToFile(
-        url: String,
-        target: File,
-        sourceUrl: String?,
-        startProgress: Int,
-        endProgress: Int,
-    ): File {
-        val request = Request.Builder()
-            .url(url)
-            .header("User-Agent", BROWSER_USER_AGENT)
-            .apply {
-                sourceUrl?.takeIf { source ->
-                    runCatching {
-                        val uri = URI(source)
-                        (uri.scheme == "https" || uri.scheme == "http") &&
-                            !uri.host.isNullOrBlank()
-                    }.getOrDefault(false)
-                }?.let { header("Referer", it) }
-            }
-            .get()
-            .build()
-        app.downloadHttpClient.newCall(request).execute().use { response ->
-            DiagnosticLogger.info(
-                category = "DOWNLOAD_MERGED",
-                event = "stream_http_response",
-                details = mapOf(
-                    "url" to url,
-                    "status" to response.code,
-                    "contentType" to response.body?.contentType(),
-                    "contentLength" to response.body?.contentLength(),
-                ),
-            )
-            if (response.code == 401 || response.code == 403) throw accessRestricted()
-            if (!response.isSuccessful) {
-                throw DownloadException("音视频流下载失败，服务器返回状态 ${response.code}。")
-            }
-            val body = response.body ?: throw DownloadException("服务器没有返回流内容。")
-            val contentLength = body.contentLength().takeIf { it > 0 }
-            ensureEnoughSpace(contentLength, applicationContext.cacheDir, MIN_CACHE_FREE_BYTES)
-            target.outputStream().use { output ->
-                body.byteStream().use { input ->
-                    copyWithProgress(input, output, contentLength, startProgress, endProgress)
-                }
-            }
-            if (!target.isFile || target.length() == 0L) {
-                throw DownloadException("流内容下载不完整，请重新解析后再试。")
-            }
-            return target
         }
     }
 
@@ -1142,7 +998,6 @@ class MediaDownloadWorker(
         const val KEY_MEDIA_URL = "media_url"
         const val KEY_SOURCE_URL = "source_url"
         const val KEY_BACKUP_URL = "backup_url"
-        const val KEY_COMPANION_URL = "companion_media_url"
         const val KEY_DOWNLOAD_STRATEGY = "download_strategy"
         const val KEY_FORMAT_SELECTOR = "format_selector"
         const val KEY_MEDIA_TYPE = "media_type"

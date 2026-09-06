@@ -62,7 +62,7 @@
 - 从纯链接或整段分享文字提取首个 HTTP/HTTPS URL，校验格式并识别常见平台/域名。
 - 接收系统 `ACTION_SEND` / `text/plain` 分享；冷启动和 `singleTop` 后台唤醒都会自动填入，但不会自动解析或下载。
 - 插件式 `MediaParser` / `ParserRegistry`，包含抖音/西瓜视频、小红书、快手、网易云音乐和公开音乐页结构化解析器、真实的 yt-dlp Android 解析器、X/Twitter 单条状态结构化图片兜底和通用 HTTP/Open Graph/HTML 媒体解析器。
-- Instagram、Facebook 和 YouTube 已进入正式平台识别与解析链路。YouTube 的 `youtu.be`、Shorts、Live 和嵌入链接会统一为单视频地址；Instagram/Facebook 的分享短链先经官方跳转展开，并自动移除常见追踪参数。
+- Instagram、Facebook 和 YouTube 已进入正式平台识别与 yt-dlp 解析链路。YouTube 的 `youtu.be`、Shorts、Live 和嵌入链接会统一为单视频地址；Instagram/Facebook 的分享短链先经官方跳转展开，并自动移除常见追踪参数。
 - Instagram/Facebook 视频优先使用 yt-dlp 的当前公开提取器；失败后只读取官方页面内当前帖的结构化状态或 Open Graph 媒体。Instagram 遇到明确的“帖子没有视频”结果时，会以忽略视频格式错误的只读模式重新取得最佳公开图片；轮播中只有部分子项报 `No video formats found` 时，应用改读单次轮播 JSON，跳过坏子项并保留每个可用视频，不再让一个坏子项拖垮整帖。新版 `data-sjs` 页面也会按 shortcode 对应的数字媒体 ID 隔离当前作品，避免采集推荐帖、头像和评论图片。公开页面直链下载会附带原作品 Referer。
 - YouTube 视频流仍优先由 yt-dlp 提取；若平台按当前网络出口要求“确认不是机器人”，官方 oEmbed 即使还能返回标题、作者和封面，也不会覆盖真实的视频访问限制或把封面冒充为解析成功。已审阅 ReClip，并对诊断链接实际测试 yt-dlp `default`、`android_vr`、`web_embedded`、`web_safari` 和 `tv` 五种匿名客户端，全部被同一网络出口拒绝，因此没有加入只会延长等待的无效重试。应用不导入 Cookie、账号凭据或播放令牌。
 - 豆包插件式解析器支持匿名公开 `/thread/` 和 `/video-sharing`：会解码 `data-fn-args` 属性中的 HTML 实体、嵌套 JSON 字符串和 Unicode URL，读取 `image_*_raw` / `originalImage`、公开图片和视频字段；存在原图时隐藏缩略图及 `_wm_` 水印派生地址。`video-sharing` 会识别官方匿名 `get_video_share_info` 响应中的 `data.play_info.main`，并在旧响应缺少播放字段时用 `video_id` 请求页面自身的 `get_play_info` 公开预览信息。若返回 URL 明确包含 `video_gen_watermark`，界面会如实标记“含平台水印”，但允许用户预览和下载，文件不会被伪装成无水印版本。实现同时注明了 `Qalxry/doubao-no-watermark` 的 GPL-3.0 字段兼容信息与 `ihmily/doubao-nomark` 的 MIT 公开播放响应兼容信息，但没有移植登录会话 XHR 拦截或像素处理。

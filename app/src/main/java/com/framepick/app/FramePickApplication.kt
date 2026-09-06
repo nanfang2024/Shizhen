@@ -25,7 +25,6 @@ import com.framepick.app.domain.parser.NeteaseMusicMediaParser
 import com.framepick.app.domain.parser.ParserRegistry
 import com.framepick.app.domain.parser.PublicMusicPageMediaParser
 import com.framepick.app.domain.parser.XiaohongshuStructuredMediaParser
-import com.framepick.app.domain.parser.YouTubeNewPipeMediaParser
 import com.framepick.app.domain.parser.YtDlpMediaParser
 import com.framepick.app.domain.parser.XStructuredMediaParser
 import com.framepick.app.domain.converter.MediaConverter
@@ -125,7 +124,6 @@ class FramePickApplication : Application(), ImageLoaderFactory {
                 PipixiaStructuredMediaParser(httpClient),
                 BilibiliStructuredMediaParser(httpClient),
                 NeteaseMusicMediaParser(httpClient),
-                YouTubeNewPipeMediaParser(httpClient),
                 YtDlpMediaParser(this, httpClient),
                 InternationalPublicPageMediaParser(httpClient),
                 PublicMusicPageMediaParser(httpClient),

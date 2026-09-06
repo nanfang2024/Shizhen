@@ -159,21 +159,20 @@ internal object AudioDownloadOptionEnricher {
             ) ?: return parsed
         val strategy = when (video.downloadStrategy) {
             DownloadStrategy.DIRECT, DownloadStrategy.DIRECT_AUDIO -> DownloadStrategy.DIRECT_AUDIO
-            DownloadStrategy.DIRECT_MERGED -> DownloadStrategy.DIRECT
             DownloadStrategy.YT_DLP, DownloadStrategy.YT_DLP_AUDIO -> DownloadStrategy.YT_DLP_AUDIO
         }
         val audio = MediaItem(
             id = "${video.id}-audio",
             type = MediaType.AUDIO,
-            mediaUrl = video.companionMediaUrl ?: video.mediaUrl,
+            mediaUrl = video.mediaUrl,
             format = "m4a",
             width = null,
             height = null,
             fileSize = null,
-            qualityLabel = when (strategy) {
-                DownloadStrategy.YT_DLP_AUDIO -> "最佳公开音轨 · 输出 M4A"
-                DownloadStrategy.DIRECT -> "平台分离音轨 · 直存"
-                else -> "从公开视频本地提取 · 输出 M4A"
+            qualityLabel = if (strategy == DownloadStrategy.YT_DLP_AUDIO) {
+                "最佳公开音轨 · 输出 M4A"
+            } else {
+                "从公开视频本地提取 · 输出 M4A"
             },
             previewUrl = video.previewUrl,
             downloadStrategy = strategy,

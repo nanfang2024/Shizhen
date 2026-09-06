@@ -72,8 +72,6 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-        // NewPipeExtractor requires java.nio desugaring on minSdk < 33.
-        isCoreLibraryDesugaringEnabled = true
     }
 
     buildFeatures {
@@ -116,11 +114,6 @@ dependencies {
     implementation("org.jsoup:jsoup:1.17.2")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.11.1")
     implementation("io.github.junkfood02.youtubedl-android:library:0.18.1")
-    implementation("com.github.teamnewpipe:NewPipeExtractor:v0.26.3") {
-        // jsoup/okhttp versions are managed by this project already.
-        exclude(group = "org.jsoup", module = "jsoup")
-    }
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.0.4")
     implementation("io.github.rbaucells:ffmpeg-android:1.22") {
         isTransitive = false
     }
