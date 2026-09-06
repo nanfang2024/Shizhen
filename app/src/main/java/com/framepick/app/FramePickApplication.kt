@@ -27,7 +27,6 @@ import com.framepick.app.domain.parser.PublicMusicPageMediaParser
 import com.framepick.app.domain.parser.XiaohongshuStructuredMediaParser
 import com.framepick.app.domain.parser.YtDlpMediaParser
 import com.framepick.app.domain.parser.XStructuredMediaParser
-import com.framepick.app.domain.parser.WeixinChannelsParser
 import com.framepick.app.domain.converter.MediaConverter
 import com.framepick.app.util.DiagnosticLogger
 import java.util.concurrent.TimeUnit
@@ -129,7 +128,6 @@ class FramePickApplication : Application(), ImageLoaderFactory {
                 InternationalPublicPageMediaParser(httpClient),
                 PublicMusicPageMediaParser(httpClient),
                 XStructuredMediaParser(httpClient),
-                WeixinChannelsParser(httpClient),
                 GenericMediaParser(httpClient),
             ),
         )

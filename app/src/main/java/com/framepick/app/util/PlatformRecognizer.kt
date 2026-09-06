@@ -51,8 +51,6 @@ object PlatformRecognizer {
         val displayName = when {
             isDomain(domain, "iesdouyin.com") && path.startsWith("/xg/") -> "西瓜视频"
             domain == "v.douyin.com" -> "抖音/西瓜视频短链"
-            domain == "weixin.qq.com" && path.startsWith("/sph/") -> "微信视频号"
-            isDomain(domain, "channels.weixin.qq.com") -> "微信视频号"
             else -> knownPlatforms.firstOrNull { (domains, _) ->
                 domains.any { isDomain(domain, it) }
             }?.second ?: domain
