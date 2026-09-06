@@ -32,6 +32,7 @@ interface DownloadRepository {
     fun observeDownloads(): Flow<List<DownloadTask>>
     suspend fun enqueue(item: MediaItem, title: String?): UUID
     fun cancel(workId: UUID)
+    fun pruneFinished()
 }
 
 class WorkManagerDownloadRepository(
@@ -124,6 +125,11 @@ class WorkManagerDownloadRepository(
             details = mapOf("workId" to workId),
         )
         workManager.cancelWorkById(workId)
+    }
+
+    /** Drops terminal work records from WorkManager's database; in-flight work is untouched. */
+    override fun pruneFinished() {
+        workManager.pruneWork()
     }
 
     companion object {

@@ -27,13 +27,14 @@ class DownloadsViewModel(application: Application) : AndroidViewModel(applicatio
     init {
         viewModelScope.launch {
             downloadRepository.observeDownloads().collect { tasks ->
-                val byItem = tasks.groupBy(DownloadTask::mediaItemId).mapValues { (_, entries) ->
-                    entries.firstOrNull { !it.state.isFinished } ?: entries.last()
-                }
-                // Active tasks first (stable order), finished ones keep working set on top.
-                val active = byItem.values.filter { !it.state.isFinished }
-                val finished = byItem.values.filter { it.state.isFinished }
-                _uiState.update { it.copy(tasks = active + finished) }
+                // Only in-flight work is shown as a task; terminal outcomes
+                // (succeeded/failed/cancelled) are already recorded in task
+                // history, where they can be deleted or cleared.
+                val active = tasks
+                    .filter { !it.state.isFinished }
+                    .groupBy(DownloadTask::mediaItemId)
+                    .map { (_, entries) -> entries.first() }
+                _uiState.update { it.copy(tasks = active) }
             }
         }
         viewModelScope.launch {
@@ -41,6 +42,9 @@ class DownloadsViewModel(application: Application) : AndroidViewModel(applicatio
                 _uiState.update { it.copy(records = records) }
             }
         }
+        // Terminal work records are invisible on this screen; drop them from
+        // WorkManager's database so it does not grow unboundedly.
+        downloadRepository.pruneFinished()
     }
 
     fun cancel(task: DownloadTask) {

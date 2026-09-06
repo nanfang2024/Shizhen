@@ -23,7 +23,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Transform
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -58,6 +60,8 @@ import com.framepick.app.ui.converter.ConverterScreen
 import com.framepick.app.ui.converter.ConverterViewModel
 import com.framepick.app.util.FileIntentUtils
 import kotlinx.coroutines.launch
+
+private const val FEEDBACK_EMAIL = "xnzyw6@gmail.com"
 
 @Composable
 fun SettingsScreen(
@@ -170,6 +174,41 @@ private fun SettingsContent(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            clipboard.setText(AnnotatedString(FEEDBACK_EMAIL))
+                            Toast.makeText(context, "已复制反馈邮箱", Toast.LENGTH_SHORT).show()
+                        }
+                        .padding(top = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Outlined.Email,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Text("软件反馈", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            FEEDBACK_EMAIL,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Icon(
+                        Icons.Outlined.ContentCopy,
+                        contentDescription = "复制邮箱",
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 Text(
                     "解析、下载与格式转换全部在本机完成，不上传任何链接或文件。",
                     style = MaterialTheme.typography.bodySmall,

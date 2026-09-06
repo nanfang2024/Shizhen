@@ -52,7 +52,6 @@ import com.framepick.app.data.repository.OperationType
 import com.framepick.app.ui.components.AppPageHeader
 import com.framepick.app.ui.components.EmptyState
 import com.framepick.app.ui.components.HeaderBrandMark
-import com.framepick.app.ui.components.PrimaryActionButton
 import com.framepick.app.ui.components.SecondaryActionButton
 import com.framepick.app.ui.components.SectionHeader
 import com.framepick.app.ui.components.WarmAccentBadge
@@ -100,14 +99,12 @@ fun DownloadsScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     SectionHeader(
                         title = stringResource(R.string.downloads_tasks_title),
-                        supportingText = "任务由系统在后台执行，离开页面后仍会继续",
+                        supportingText = "任务由系统在后台执行，离开页面后仍会继续；完成或取消后自动归入下方任务历史",
                     )
                     state.tasks.forEach { task ->
                         DownloadTaskCard(
                             task = task,
                             onCancel = viewModel::cancel,
-                            onOpen = { uri -> FileIntentUtils.open(context, uri) },
-                            onShare = { uri -> FileIntentUtils.share(context, uri) },
                         )
                     }
                 }
@@ -132,6 +129,9 @@ fun DownloadsScreen(
                             onOpen = record.outputUri
                                 ?.takeIf { record.operationType != OperationType.PARSE }
                                 ?.let { uri -> ({ FileIntentUtils.open(context, uri) }) },
+                            onShare = record.outputUri
+                                ?.takeIf { record.operationType != OperationType.PARSE }
+                                ?.let { uri -> ({ FileIntentUtils.share(context, uri) }) },
                         )
                     }
                 }
@@ -180,17 +180,15 @@ fun DownloadsScreen(
 private fun DownloadTaskCard(
     task: DownloadTask,
     onCancel: (DownloadTask) -> Unit,
-    onOpen: (String) -> Unit,
-    onShare: (String) -> Unit,
 ) {
     WarmSurfaceCard {
         SectionHeader(
-            title = task.displayName(),
+            title = "媒体下载任务",
             supportingText = "资源标识：${task.mediaItemId}",
             action = {
                 WarmAccentBadge(
                     task.state.displayName(),
-                    emphasis = task.state == WorkInfo.State.SUCCEEDED,
+                    emphasis = false,
                 )
             },
         )
@@ -208,56 +206,9 @@ private fun DownloadTaskCard(
                 Text("下载中 ${task.progress.coerceIn(0, 100)}%", color = MaterialTheme.colorScheme.primary)
                 SecondaryActionButton("取消下载", { onCancel(task) }, Modifier.fillMaxWidth())
             }
-            WorkInfo.State.SUCCEEDED -> {
-                Text(
-                    "下载完成",
-                    color = MaterialTheme.extendedColors.success,
-                    style = MaterialTheme.typography.labelLarge,
-                )
-                Text(
-                    "保存位置：${task.outputUri}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                task.outputUri?.let { uri ->
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        PrimaryActionButton(
-                            "打开文件",
-                            { onOpen(uri) },
-                            Modifier.weight(1f),
-                        )
-                        SecondaryActionButton(
-                            "分享",
-                            { onShare(uri) },
-                            Modifier.weight(1f),
-                            icon = { Icon(Icons.Outlined.Share, contentDescription = null, Modifier.size(18.dp)) },
-                        )
-                    }
-                }
-            }
-            WorkInfo.State.FAILED, WorkInfo.State.CANCELLED -> {
-                Text(
-                    if (task.state == WorkInfo.State.CANCELLED) "下载已取消" else "下载失败",
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.labelLarge,
-                )
-                task.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                Text(
-                    "详细原因可在「设置 → 诊断中心」中查看。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            WorkInfo.State.SUCCEEDED, WorkInfo.State.FAILED, WorkInfo.State.CANCELLED -> Unit
         }
     }
-}
-
-private fun DownloadTask.displayName(): String = when (state) {
-    WorkInfo.State.SUCCEEDED -> outputUri
-        ?.substringAfterLast('/')
-        ?.takeIf { it.isNotBlank() }
-        ?: "已完成的下载"
-    else -> "媒体下载任务"
 }
 
 private fun WorkInfo.State.displayName(): String = when (this) {
@@ -275,6 +226,7 @@ private fun HistoryCard(
     onDetails: () -> Unit,
     onDelete: () -> Unit,
     onOpen: (() -> Unit)?,
+    onShare: (() -> Unit)?,
 ) {
     Card(
         modifier = Modifier
@@ -321,6 +273,11 @@ private fun HistoryCard(
             onOpen?.let {
                 IconButton(onClick = it) {
                     Icon(Icons.Outlined.FolderOpen, contentDescription = "打开输出文件")
+                }
+            }
+            onShare?.let {
+                IconButton(onClick = it) {
+                    Icon(Icons.Outlined.Share, contentDescription = "分享输出文件")
                 }
             }
             IconButton(onClick = onDelete) {
