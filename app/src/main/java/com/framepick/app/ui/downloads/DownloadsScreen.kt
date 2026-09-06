@@ -116,10 +116,10 @@ fun DownloadsScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     SectionHeader(
                         title = stringResource(R.string.downloads_history_title),
-                        supportingText = stringResource(R.string.downloads_history_subtitle),
+                        supportingText = stringResource(R.string.history_subtitle),
                         action = {
                             SecondaryActionButton(
-                                text = stringResource(R.string.downloads_history_clear_all),
+                                text = stringResource(R.string.clear_all),
                                 onClick = { confirmClear = true },
                             )
                         },
