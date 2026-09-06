@@ -1,0 +1,3 @@
+a59f1069dce69e47cabc8aed33e0655a29c21844db964b24007301a6ea3eee23  shiguang-wuhen-1.0.0-youtube-newpipe-release-unsigned.apk
+ac0c6d29c78e75523ef688abb29d970fc2553509f238ec3009760f6ef7f6f853  shiguang-wuhen-source-full-1.0.0-youtube-newpipe.zip
+4b82cd718a24c5751ffe4aac65b1a89793673847ce54d78469e6a94db24207b3  shiguang-wuhen-source-lite-1.0.0-youtube-newpipe.zip

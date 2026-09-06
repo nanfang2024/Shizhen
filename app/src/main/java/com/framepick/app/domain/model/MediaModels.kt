@@ -31,6 +31,7 @@ data class MediaItem(
     val previewAsVideo: Boolean = false,
     val isPreviewOnly: Boolean = false,
     val backupUrl: String? = null,
+    val companionMediaUrl: String? = null,
 )
 
 enum class DownloadStrategy {
@@ -38,6 +39,7 @@ enum class DownloadStrategy {
     YT_DLP,
     DIRECT_AUDIO,
     YT_DLP_AUDIO,
+    DIRECT_MERGED,
 }
 
 enum class SourceWatermark {

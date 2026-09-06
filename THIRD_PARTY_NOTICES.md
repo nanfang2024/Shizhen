@@ -31,6 +31,8 @@
 
 `io.github.junkfood02.youtubedl-android:library:0.18.1` 的发布元数据声明 GPL-3.0。因为应用与该组件一同分发，拾帧采用 GPL-3.0，完整许可证在仓库根目录 [LICENSE](LICENSE)。
 
+`com.github.teamnewpipe:NewPipeExtractor:v0.26.3`（经 JitPack 发布）声明 GPL-3.0，用于 YouTube 公开视频流的设备端本地提取。本项目未修改其源码，按未修改版本与其源码依赖一同分发，并保留上游版权与许可证声明；应用整体继续按 GPL-3.0 分发。
+
 豆包公开页字段兼容实现审阅了 Qalxry、Zhanghuaimin-233 的 `doubao-no-watermark` GPL-3.0 用户脚本，并在源码中保留作者、许可证、仓库和审阅提交信息。APK 不包含该 Tampermonkey 脚本，不复制其登录会话网络拦截、提示词管理或双图像素拼接实现。
 
 豆包公开播放响应兼容实现还审阅了 Hmily 的 `doubao-nomark` MIT 项目中匿名 `get_play_info` 的请求与 `original_media_info` 字段。APK 不包含其 Python/FastAPI 服务或 Docker 镜像；源码注释及本文件保留了项目、提交、作者和许可证信息。
