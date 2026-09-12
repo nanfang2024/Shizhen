@@ -48,6 +48,7 @@ class MediaDownloadWorker(
     private val app = appContext as FramePickApplication
     private val historyRepository = app.historyRepository
     private var createdOutput: OutputDestination? = null
+    private var foregroundUnavailableLogged = false
 
     override suspend fun doWork(): Result {
         val mediaUrl = inputData.getString(KEY_MEDIA_URL)
@@ -83,7 +84,7 @@ class MediaDownloadWorker(
             ),
         )
 
-        setForeground(createForegroundInfo(0, "等待下载"))
+        promoteForeground(0, "等待下载")
         historyRepository.updateResult(historyId, OperationStatus.RUNNING)
 
         return try {
@@ -123,7 +124,7 @@ class MediaDownloadWorker(
             }
             destination.publish()
             setProgress(workDataOf(KEY_PROGRESS to 100))
-            setForeground(createForegroundInfo(100, "下载完成"))
+            promoteForeground(100, "下载完成")
             historyRepository.updateResult(
                 historyId,
                 OperationStatus.SUCCESS,
@@ -185,6 +186,22 @@ class MediaDownloadWorker(
                 failure(message)
             }
         }
+    }
+
+    private suspend fun promoteForeground(progress: Int, message: String) {
+        runCatching { setForeground(createForegroundInfo(progress, message)) }
+            .onFailure { failure -> logForegroundUnavailable(message, failure) }
+    }
+
+    private fun logForegroundUnavailable(stage: String, failure: Throwable) {
+        if (foregroundUnavailableLogged) return
+        foregroundUnavailableLogged = true
+        DiagnosticLogger.warning(
+            category = "DOWNLOAD",
+            event = "foreground_unavailable",
+            details = mapOf("workId" to id, "stage" to stage),
+            failure = failure,
+        )
     }
 
     private fun resolveDirectDownloadUrl(mediaUrl: String, sourceUrl: String): String {
@@ -354,7 +371,7 @@ class MediaDownloadWorker(
             }
 
             setProgress(workDataOf(KEY_PROGRESS to 78))
-            setForeground(createForegroundInfo(78, "正在本地提取音轨"))
+            promoteForeground(78, "正在本地提取音轨")
             val output = File(taskDirectory, "audio.m4a")
             val copyArguments = listOf(
                 "-i", input.absolutePath,
@@ -455,7 +472,7 @@ class MediaDownloadWorker(
                 createdOutput?.delete()
                 createdOutput = null
                 setProgress(workDataOf(KEY_PROGRESS to 0))
-                setForeground(createForegroundInfo(0, "直链已过期，正在重新获取音频"))
+                promoteForeground(0, "直链已过期，正在重新获取音频")
                 DiagnosticLogger.warning(
                     category = "DOWNLOAD_QQ_AUDIO",
                     event = "verified_direct_failed_falling_back_ytdlp",
@@ -628,7 +645,7 @@ class MediaDownloadWorker(
             details = mapOf("input" to input.name, "bytes" to input.length()),
         )
         setProgress(workDataOf(KEY_PROGRESS to 90))
-        setForeground(createForegroundInfo(90, "正在本地转换为 GIF"))
+        promoteForeground(90, "正在本地转换为 GIF")
         val output = File(taskDirectory, "media_converted.gif")
         val paletteArguments = listOf(
             "-i", input.absolutePath,
@@ -792,7 +809,7 @@ class MediaDownloadWorker(
                 lastProgress = progress
                 setProgress(workDataOf(KEY_PROGRESS to progress))
                 if (progress == startProgress || progress % 5 == 0) {
-                    setForeground(createForegroundInfo(progress, "正在保存文件"))
+                    promoteForeground(progress, "正在保存文件")
                 }
             }
         }

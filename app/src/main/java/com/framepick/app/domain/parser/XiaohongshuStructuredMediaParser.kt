@@ -218,6 +218,7 @@ internal object XiaohongshuStateExtractor {
                         if (candidate.isOriginal) "公开原始源" else "页面公开播放源",
                     ).distinct().joinToString(" · "),
                     previewUrl = candidate.url,
+                    downloadSourceUrl = finalUrl,
                     isRecommended = index == 0,
                     hasAudio = true,
                     codecSummary = candidate.codec,
@@ -244,6 +245,7 @@ internal object XiaohongshuStateExtractor {
                     fileSize = null,
                     qualityLabel = "页面封面",
                     previewUrl = image.url,
+                    downloadSourceUrl = finalUrl,
                     sourceWatermark = if (image.isOriginal) {
                         SourceWatermark.PUBLIC_ORIGINAL
                     } else {
@@ -272,6 +274,7 @@ internal object XiaohongshuStateExtractor {
                         if (image.isOriginal) "公开原始尺寸" else "页面最高公开尺寸",
                     ).joinToString(" · "),
                     previewUrl = image.url,
+                    downloadSourceUrl = finalUrl,
                     isRecommended = index == 0,
                     sourceWatermark = if (image.isOriginal) {
                         SourceWatermark.PUBLIC_ORIGINAL

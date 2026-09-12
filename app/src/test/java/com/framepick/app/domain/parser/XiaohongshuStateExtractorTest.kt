@@ -55,6 +55,11 @@ class XiaohongshuStateExtractorTest {
         )
         assertTrue(result.items.all { it.format == null })
         assertTrue(result.items.all { it.sourceWatermark == SourceWatermark.PUBLIC_ORIGINAL })
+        assertTrue(
+            result.items.all {
+                it.downloadSourceUrl == "https://www.xiaohongshu.com/discovery/item/note123"
+            },
+        )
         assertFalse(result.items.any { it.mediaUrl.contains("unrelated") })
     }
 
@@ -94,5 +99,8 @@ class XiaohongshuStateExtractorTest {
         assertTrue(original.mediaUrl.endsWith("/spectrum/original-key"))
         assertTrue(original.isRecommended)
         assertEquals(MediaType.COVER, result.items.last().type)
+        assertTrue(
+            result.items.all { it.downloadSourceUrl == "https://www.xiaohongshu.com/explore/abc123" },
+        )
     }
 }
