@@ -10,7 +10,6 @@ import com.framepick.app.util.PublicUrlNormalizer
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import java.io.IOException
-import java.net.URLDecoder
 import java.util.Locale
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
@@ -19,13 +18,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.Jsoup
 
-/**
- * Pipixia parsing, two stages:
- * 1. ppxvod direct-link flow (verified approach): the h5 item page embeds
- *    percent-encoded ppxvod CDN URLs; `dr=6&dy_q` marks the watermark-free
- *    Douyin-API source, `lr=superb` marks the watermarked fallback.
- * 2. `__INITIAL_STATE__` flow (legacy fallback) for image posts and page drift.
- */
+/** Reads the public `__INITIAL_STATE__` embedded in a Pipixia share page. */
 class PipixiaStructuredMediaParser(
     private val client: OkHttpClient,
 ) : MediaParser {
@@ -33,15 +26,33 @@ class PipixiaStructuredMediaParser(
 
     override suspend fun parse(url: String): Result<ParsedMedia> = withContext(Dispatchers.IO) {
         DiagnosticLogger.info("PIPPIX_STRUCTURED_PARSE", "parse_started", mapOf("url" to url))
-        val result = runCatching {
-            parsePpxvodDirect(url)
-        }.recoverCatching { directFailure ->
-            DiagnosticLogger.warning(
-                category = "PIPPIX_STRUCTURED_PARSE",
-                event = "ppxvod_direct_failed_falling_back",
-                failure = directFailure,
-            )
-            parseInitialState(url)
+        runCatching {
+            client.newCall(
+                Request.Builder()
+                    .url(PublicUrlNormalizer.upgradeKnownHttp(url))
+                    .header("User-Agent", BROWSER_USER_AGENT)
+                    .get()
+                    .build(),
+            ).execute().use { response ->
+                DiagnosticLogger.info(
+                    category = "PIPPIX_STRUCTURED_PARSE",
+                    event = "http_response",
+                    details = mapOf(
+                        "status" to response.code,
+                        "contentType" to response.body?.contentType(),
+                        "finalUrl" to response.request.url,
+                    ),
+                )
+                if (response.code == 401 || response.code == 403) throw accessRestricted()
+                if (!response.isSuccessful) throw IOException("皮皮虾公开页面返回状态 ${response.code}")
+                val html = response.body?.string().orEmpty()
+                if (looksRestricted(html)) throw accessRestricted()
+                PipixiaStateExtractor.extract(url, response.request.url.toString(), html)
+                    ?: throw MediaParseException(
+                        MediaParseException.Reason.NO_MEDIA,
+                        "皮皮虾公开页面没有返回可读取的媒体资源。",
+                    )
+            }
         }.recoverCatching { failure ->
             throw when (failure) {
                 is MediaParseException -> failure
@@ -72,81 +83,6 @@ class PipixiaStructuredMediaParser(
                 failure = failure,
             )
         }
-        result
-    }
-
-    /** Verified flow: h5 item page -> percent-encoded ppxvod direct links. */
-    private fun parsePpxvodDirect(url: String): ParsedMedia {
-        val rawItemId = PipixItemIdExtractor.fromUrl(url)
-            ?: throw MediaParseException(
-                MediaParseException.Reason.NO_MEDIA,
-                "无法从链接中识别皮皮虾作品 ID。",
-            )
-        val itemId = expandShortLinkIfNeeded(rawItemId)
-        val html = fetchDetailPage(itemId)
-        return PipixiaDirectExtractor.extract(url, itemId, html)
-            ?: throw MediaParseException(
-                MediaParseException.Reason.NO_MEDIA,
-                "皮皮虾作品页没有返回可读取的视频直链。",
-            )
-    }
-
-    /** `/s/` short codes redirect to the numeric `/item/NNN` page. */
-    private fun expandShortLinkIfNeeded(itemId: String): String {
-        if (itemId.all(Char::isDigit)) return itemId
-        client.newCall(
-            Request.Builder()
-                .url("https://h5.pipix.com/s/$itemId/")
-                .header("User-Agent", IPHONE_USER_AGENT)
-                .header("Referer", PIPIX_REFERER)
-                .get()
-                .build(),
-        ).execute().use { response ->
-            if (!response.isSuccessful) throw IOException("皮皮虾短链返回状态 ${response.code}")
-            val finalUrl = response.request.url.toString()
-            return Regex("/item/(\\d+)").find(finalUrl)?.groupValues?.getOrNull(1)
-                ?: throw MediaParseException(
-                    MediaParseException.Reason.NO_MEDIA,
-                    "皮皮虾短链未能解析出作品 ID。",
-                )
-        }
-    }
-
-    private fun fetchDetailPage(itemId: String): String {
-        val detailUrl = "https://h5.pipix.com/ppx/item/$itemId?app_id=1319&app=super"
-        client.newCall(
-            Request.Builder()
-                .url(detailUrl)
-                .header("User-Agent", IPHONE_USER_AGENT)
-                .header("Referer", PIPIX_REFERER)
-                .get()
-                .build(),
-        ).execute().use { response ->
-            if (response.code == 401 || response.code == 403) throw accessRestricted()
-            if (!response.isSuccessful) throw IOException("皮皮虾作品页返回状态 ${response.code}")
-            return response.body?.string().orEmpty()
-        }
-    }
-
-    /** Legacy flow: structured `window.__INITIAL_STATE__` on the share page. */
-    private fun parseInitialState(url: String): ParsedMedia {
-        client.newCall(
-            Request.Builder()
-                .url(PublicUrlNormalizer.upgradeKnownHttp(url))
-                .header("User-Agent", BROWSER_USER_AGENT)
-                .get()
-                .build(),
-        ).execute().use { response ->
-            if (response.code == 401 || response.code == 403) throw accessRestricted()
-            if (!response.isSuccessful) throw IOException("皮皮虾公开页面返回状态 ${response.code}")
-            val html = response.body?.string().orEmpty()
-            if (looksRestricted(html)) throw accessRestricted()
-            return PipixiaStateExtractor.extract(url, response.request.url.toString(), html)
-                ?: throw MediaParseException(
-                    MediaParseException.Reason.NO_MEDIA,
-                    "皮皮虾公开页面没有返回可读取的媒体资源。",
-                )
-        }
     }
 
     private fun looksRestricted(html: String): Boolean {
@@ -160,10 +96,6 @@ class PipixiaStructuredMediaParser(
     )
 
     private companion object {
-        const val IPHONE_USER_AGENT =
-            "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) " +
-                "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"
-        const val PIPIX_REFERER = "https://h5.pipix.com/"
         const val BROWSER_USER_AGENT =
             "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/124 Mobile Safari/537.36"
     }
@@ -399,170 +331,6 @@ internal object PipixiaStateExtractor {
             else -> "jpg"
         }
     }
-}
-
-/** Extracts the item id from share links; short codes are non-numeric. */
-internal object PipixItemIdExtractor {
-    private val patterns = listOf(
-        Regex("h5\\.pipix\\.com/s/([A-Za-z0-9_-]+)"),
-        Regex("h5\\.pipix\\.com/ppx/item/(\\d+)"),
-        Regex("pipix\\.com/item/(\\d+)"),
-        Regex("item/(\\d+)"),
-    )
-
-    fun fromUrl(url: String): String? {
-        val trimmed = url.trim()
-        if (trimmed.isNotEmpty() && trimmed.all(Char::isDigit)) return trimmed
-        return patterns.firstNotNullOfOrNull { pattern ->
-            pattern.find(trimmed)?.groupValues?.getOrNull(1)
-        }
-    }
-}
-
-/**
- * Ranks ppxvod CDN candidates by watermark-free tier, then v26 nodes.
- * The item page embeds the URLs percent-encoded, so scanning runs on both the
- * raw and the decoded body.
- */
-internal object PpxvodUrlScanner {
-    data class Candidate(val url: String, val baseUrl: String, val tier: Tier)
-
-    enum class Tier(
-        val label: String,
-        val watermark: SourceWatermark,
-        val note: String,
-    ) {
-        CLEAN(
-            "公开无水印直链",
-            SourceWatermark.PUBLIC_ORIGINAL,
-            "已选择页面标记的抖音 API 无水印直链（dr=6&dy_q），拾光无痕不做画面后处理。",
-        ),
-        PARTIAL(
-            "部分去水印直链",
-            SourceWatermark.PUBLIC_CLEAN,
-            "已选择页面标记的 dr=6 直链；该链路通常无水印，但页面未带 dy_q 校验标记。",
-        ),
-        WATERMARKED(
-            "平台水印源（兜底）",
-            SourceWatermark.WATERMARKED,
-            "页面只返回了带水印的 lr=superb 源，已如实标注。",
-        ),
-        UNKNOWN(
-            "页面公开播放源",
-            SourceWatermark.UNKNOWN,
-            "使用皮皮虾公开页面播放源；页面未提供可验证的水印标记。",
-        ),
-    }
-
-    private val urlPattern = Regex("""https?://[^\s"'\\<>]+ppxvod\.com[^\s"'\\<>]*""")
-
-    fun scan(html: String): List<Candidate> {
-        val variants = sequenceOf(
-            html,
-            html.replace("\\/", "/"),
-            runCatching { URLDecoder.decode(html, Charsets.UTF_8) }.getOrNull().orEmpty(),
-        ).filter(String::isNotEmpty).distinct()
-        return variants.flatMap { text -> urlPattern.findAll(text).map { it.value } }
-            .map(::cleanup)
-            .filter { it.startsWith("http") && "ppxvod.com" in it }
-            .map { url ->
-                Candidate(
-                    url = url,
-                    baseUrl = url.substringBefore('?'),
-                    tier = tierOf(url),
-                )
-            }
-            .sortedWith(
-                compareBy<Candidate> { it.tier.ordinal }
-                    .thenByDescending { it.baseUrl.contains("v26-cdn") },
-            )
-            .distinctBy { it.baseUrl }
-            .toList()
-    }
-
-    private fun cleanup(url: String): String {
-        val unescaped = url
-            .replace("\\/", "/")
-            .replace("\\\"", "")
-            .replace("\\u002F", "/")
-            .replace("\\u0026", "&")
-        return if ('%' in unescaped) {
-            runCatching { URLDecoder.decode(unescaped, Charsets.UTF_8) }.getOrDefault(unescaped)
-        } else {
-            unescaped
-        }
-    }
-
-    private fun tierOf(url: String): Tier = when {
-        "dr=6" in url && "dy_q" in url -> Tier.CLEAN
-        "dr=6" in url -> Tier.PARTIAL
-        "lr=superb" in url -> Tier.WATERMARKED
-        else -> Tier.UNKNOWN
-    }
-}
-
-/** Builds ParsedMedia from the ppxvod direct links found on the item page. */
-internal object PipixiaDirectExtractor {
-    private val metaDescription = Regex("""<meta\s+name="description"\s+content="([^"]*)"""")
-    private val titleTag = Regex("""<title>([^<]*)</title>""")
-    private val ogImage = Regex("""<meta\s+property="og:image"\s+content="([^"]*)"""")
-
-    fun extract(sourceUrl: String, itemId: String, html: String): ParsedMedia? {
-        val candidates = PpxvodUrlScanner.scan(html)
-        if (candidates.isEmpty()) return null
-        val chosen = candidates.first()
-        val backup = candidates.firstOrNull { it.baseUrl != chosen.baseUrl }
-        val cover = ogImage.find(html)?.groupValues?.getOrNull(1)
-            ?.takeIf { it.startsWith("http") }
-            ?.let(PublicUrlNormalizer::upgradeKnownHttp)
-        val item = MediaItem(
-            id = stableId("pipix-direct:$itemId:${chosen.url}"),
-            type = MediaType.VIDEO,
-            mediaUrl = chosen.url,
-            backupUrl = backup?.url,
-            format = "mp4",
-            width = null,
-            height = null,
-            fileSize = null,
-            qualityLabel = chosen.tier.label,
-            previewUrl = chosen.url,
-            isRecommended = true,
-            hasAudio = true,
-            sourceWatermark = chosen.tier.watermark,
-            watermarkNote = chosen.tier.note,
-        )
-        return ParsedMedia(
-            sourceUrl = sourceUrl,
-            platform = "皮皮虾",
-            title = extractTitle(html),
-            author = null,
-            thumbnailUrl = cover,
-            items = WatermarkPolicy.withRecommendation(listOf(item)),
-        ).also { parsed ->
-            DiagnosticLogger.info(
-                category = "PIPPIX_STRUCTURED_PARSE",
-                event = "ppxvod_direct_candidates",
-                details = mapOf(
-                    "itemId" to itemId,
-                    "tier" to chosen.tier.name,
-                    "candidates" to candidates.size,
-                    "backupPresent" to (backup != null),
-                ),
-            )
-        }
-    }
-
-    private fun extractTitle(html: String): String? = sequenceOf(
-        metaDescription.find(html)?.groupValues?.getOrNull(1),
-        titleTag.find(html)?.groupValues?.getOrNull(1),
-    ).filterNotNull()
-        .map { it.trim() }
-        .map { it.removeSuffix(" - 皮皮虾").trim() }
-        .firstOrNull { it.isNotEmpty() && it != "皮皮虾" }
-        ?.take(80)
-
-    private fun stableId(seed: String): String =
-        UUID.nameUUIDFromBytes(seed.toByteArray()).toString()
 }
 
 /** Matches Pipixia share and work pages without trusting sub-domain details. */

@@ -225,28 +225,6 @@ class MediaDownloadWorker(
         }
     }
 
-    /**
-     * ppxvod CDN rejects requests whose Referer is not the h5 item page host,
-     * so direct transfers from share links must be rewritten explicitly.
-     */
-    private fun resolveDownloadReferer(url: String, sourceUrl: String?): String? {
-        val host = runCatching {
-            URI(url).host.orEmpty().lowercase(Locale.ROOT)
-        }.getOrDefault("")
-        if (host.endsWith(".ppxvod.com") || host == "ppxvod.com" ||
-            host == "pipix.com" || host.endsWith(".pipix.com")
-        ) {
-            return "https://h5.pipix.com/"
-        }
-        return sourceUrl?.takeIf { source ->
-            runCatching {
-                val uri = URI(source)
-                (uri.scheme == "https" || uri.scheme == "http") &&
-                    !uri.host.isNullOrBlank()
-            }.getOrDefault(false)
-        }
-    }
-
     private suspend fun performDirectTransfer(
         url: String,
         sourceUrl: String?,
@@ -259,7 +237,14 @@ class MediaDownloadWorker(
                 .url(url)
                 .header("User-Agent", BROWSER_USER_AGENT)
                 .apply {
-                    resolveDownloadReferer(url, sourceUrl)?.let { header("Referer", it) }
+                    val referer = sourceUrl?.takeIf { source ->
+                        runCatching {
+                            val uri = URI(source)
+                            (uri.scheme == "https" || uri.scheme == "http") &&
+                                !uri.host.isNullOrBlank()
+                        }.getOrDefault(false)
+                    }
+                    referer?.let { header("Referer", it) }
                 }
                 .get()
                 .build()
@@ -328,7 +313,13 @@ class MediaDownloadWorker(
                     .url(url)
                     .header("User-Agent", BROWSER_USER_AGENT)
                     .apply {
-                        resolveDownloadReferer(url, sourceUrl)?.let { header("Referer", it) }
+                        sourceUrl?.takeIf { source ->
+                            runCatching {
+                                val uri = URI(source)
+                                (uri.scheme == "https" || uri.scheme == "http") &&
+                                    !uri.host.isNullOrBlank()
+                            }.getOrDefault(false)
+                        }?.let { header("Referer", it) }
                     }
                     .get()
                     .build(),
@@ -512,7 +503,6 @@ class MediaDownloadWorker(
             val request = YoutubeDLRequest(sourceUrl)
                 .addOption("--no-playlist")
                 .addOption("--no-warnings")
-                .addOption("--no-check-certificates")
                 .addOption("--newline")
                 .addOption("--format", formatSelector?.takeIf(String::isNotBlank) ?: BEST_SELECTOR)
                 .addOption("--ffmpeg-location", ffmpegExecutable.absolutePath)
