@@ -361,6 +361,13 @@ class YtDlpMediaParser(
         failure: YoutubeDLException,
         url: String,
     ): MediaParseException {
+        if (YtDlpBotCheckPolicy.isBotCheck(url, failure.message)) {
+            return MediaParseException(
+                MediaParseException.Reason.ACCESS_RESTRICTED,
+                "YouTube 风控要求验证设备，已自动尝试多种客户端仍被拒绝；请稍后或更换网络后重试。",
+                failure,
+            )
+        }
         val text = failure.message.orEmpty().lowercase(Locale.ROOT)
         val internationalMessage = InternationalPlatformFailurePolicy
             .accessRestrictionMessage(url, text)
@@ -390,6 +397,9 @@ class YtDlpMediaParser(
                 DiagnosticLogger.info("YT_DLP_PARSE", "primary_info_succeeded")
             }
         } catch (primaryFailure: YoutubeDLException) {
+            if (YtDlpBotCheckPolicy.isBotCheck(url, primaryFailure.message)) {
+                return getInfoWithBotCheckRetries(url, primaryFailure)
+            }
             if (YtDlpInternationalFallbackPolicy.shouldRetryInstagramAsImage(url, primaryFailure.message)) {
                 DiagnosticLogger.info(
                     category = "YT_DLP_PARSE",
@@ -421,6 +431,39 @@ class YtDlpMediaParser(
                 DiagnosticLogger.info("YT_DLP_PARSE", "syndication_info_succeeded")
             }
         }
+    }
+
+    /** YouTube bot-check workaround: retry with non-web player clients. */
+    private fun getInfoWithBotCheckRetries(
+        url: String,
+        primaryFailure: YoutubeDLException,
+    ): VideoInfo {
+        var lastFailure = primaryFailure
+        for (client in YtDlpBotCheckPolicy.playerClientRetries()) {
+            try {
+                DiagnosticLogger.warning(
+                    category = "YT_DLP_PARSE",
+                    event = "bot_check_retry",
+                    failure = lastFailure,
+                    details = mapOf("playerClient" to client),
+                )
+                return YoutubeDL.getInstance()
+                    .getInfo(
+                        createInfoRequest(url)
+                            .addOption("--extractor-args", "youtube:player_client=$client"),
+                    )
+                    .also {
+                        DiagnosticLogger.info(
+                            category = "YT_DLP_PARSE",
+                            event = "bot_check_retry_succeeded",
+                            details = mapOf("playerClient" to client),
+                        )
+                    }
+            } catch (failure: YoutubeDLException) {
+                lastFailure = failure
+            }
+        }
+        throw lastFailure
     }
 
     private fun parseInstagramPlaylist(url: String): ParsedMedia? {
@@ -525,6 +568,7 @@ class YtDlpMediaParser(
     private fun createInfoRequest(url: String): YoutubeDLRequest = YoutubeDLRequest(url)
         .addOption("--no-playlist")
         .addOption("--no-warnings")
+        .addOption("--no-check-certificates")
         .addOption("--skip-download")
         .addOption("--extractor-retries", 2)
         .addOption("--socket-timeout", 20)
@@ -684,6 +728,25 @@ class YtDlpMediaParser(
         const val BROWSER_USER_AGENT =
             "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/124 Mobile Safari/537.36"
     }
+}
+
+/** Detects YouTube's anti-bot interstitial and offers non-web player clients. */
+internal object YtDlpBotCheckPolicy {
+    private val markers = listOf(
+        "confirm you're not a bot",
+        "confirm you are not a bot",
+        "sign in to confirm",
+        "not a bot",
+    )
+
+    fun isBotCheck(url: String, message: String?): Boolean {
+        val platform = PlatformRecognizer.recognize(url)?.displayName
+        if (platform != "YouTube") return false
+        val text = message.orEmpty().lowercase(Locale.ROOT)
+        return markers.any(text::contains)
+    }
+
+    fun playerClientRetries(): List<String> = listOf("android", "tv")
 }
 
 internal object YtDlpInternationalFallbackPolicy {
