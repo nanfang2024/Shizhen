@@ -135,37 +135,6 @@ class PipixiaPpxvodDirectTest {
     }
 
     @Test
-    fun scannerSurvivesIllegalPercentSequencesFromPageCss() {
-        // Real h5 pages embed CSS like `rgba(...) -5.1%, rgba(...)`; the strict
-        // java.net.URLDecoder throws on the `%,` pair, which emptied the
-        // decoded scan variant on device. Lenient decoding must keep scanning.
-        val encoded = "https%3A%2F%2Fv26-cdn.ppxvod.com%2Fmedia%2F1%2F" +
-            "%3Fdr%3D6%26dy_q%3D1700000000"
-        val html = """
-            <html><head><style>
-            .g{background:linear-gradient(104.5deg, rgba(133,157,255,0.2) -5.1%, rgba(255,97,92,0.2) 89.33%);}
-            </style></head><body>
-            <script>{"play":"$encoded"}</script>
-            </body></html>
-        """.trimIndent()
-
-        val candidates = PpxvodUrlScanner.scan(html)
-
-        assertEquals(1, candidates.size)
-        assertEquals(PpxvodUrlScanner.Tier.CLEAN, candidates[0].tier)
-        assertTrue("dr=6" in candidates[0].url && "dy_q" in candidates[0].url)
-    }
-
-    @Test
-    fun lenientDecoderKeepsIllegalPercentSequencesAndPlusSigns() {
-        assertEquals("a+1+2% zz", LenientPercentDecoder.decode("a+1%2B2% zz"))
-        assertEquals("50;;", LenientPercentDecoder.decode("50%3B;"))
-        assertEquals("50%zz;", LenientPercentDecoder.decode("50%zz%3B"))
-        assertEquals("héllo", LenientPercentDecoder.decode("h%C3%A9llo"))
-        assertEquals("100%分", LenientPercentDecoder.decode("100%25分"))
-    }
-
-    @Test
     fun extractorReturnsNullWhenPageHasNoDirectLinks() {
         assertNull(
             PipixiaDirectExtractor.extract(

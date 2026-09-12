@@ -40,10 +40,6 @@ class YtDlpBotCheckPolicyTest {
         val clients = YtDlpBotCheckPolicy.playerClientRetries()
         assertTrue(clients.isNotEmpty())
         assertTrue(clients.none { it == "web" })
-        assertEquals("tv", clients.first())
-        assertTrue("mweb" in clients)
-        assertTrue("web_safari" in clients)
-        assertTrue("android_vr" in clients)
-        assertTrue("ios" in clients && "android" in clients)
+        assertEquals("android", clients.first())
     }
 }

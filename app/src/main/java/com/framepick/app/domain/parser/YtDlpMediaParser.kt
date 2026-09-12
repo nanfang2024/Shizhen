@@ -433,25 +433,8 @@ class YtDlpMediaParser(
         }
     }
 
-    /** YouTube bot-check workaround: retry non-web clients, then self-heal via update. */
+    /** YouTube bot-check workaround: retry with non-web player clients. */
     private fun getInfoWithBotCheckRetries(
-        url: String,
-        primaryFailure: YoutubeDLException,
-    ): VideoInfo {
-        try {
-            return attemptBotCheckClients(url, primaryFailure)
-        } catch (firstRound: YoutubeDLException) {
-            DiagnosticLogger.warning(
-                category = "YT_DLP_PARSE",
-                event = "bot_check_all_clients_failed_forcing_update",
-                failure = firstRound,
-            )
-            maybeUpdateExtractor(force = true)
-            return attemptBotCheckClients(url, firstRound)
-        }
-    }
-
-    private fun attemptBotCheckClients(
         url: String,
         primaryFailure: YoutubeDLException,
     ): VideoInfo {
@@ -660,21 +643,19 @@ class YtDlpMediaParser(
         SourceWatermark.WATERMARKED, null -> 0
     }
 
-    private fun maybeUpdateExtractor(force: Boolean = false) {
+    private fun maybeUpdateExtractor() {
         val preferences = context.getSharedPreferences(UPDATE_PREFERENCES, Context.MODE_PRIVATE)
         val now = System.currentTimeMillis()
-        val lastSuccess = preferences.getLong(KEY_LAST_UPDATE_ATTEMPT, 0L)
-        val lastFailure = preferences.getLong(KEY_LAST_UPDATE_FAILURE, 0L)
-        if (!force && YtDlpUpdateThrottle.shouldSkip(now, lastSuccess, lastFailure)) {
+        val lastAttempt = preferences.getLong(KEY_LAST_UPDATE_ATTEMPT, 0L)
+        if (now - lastAttempt < UPDATE_INTERVAL_MS) {
             DiagnosticLogger.info(
                 category = "YT_DLP_UPDATE",
                 event = "update_skipped_recent_attempt",
-                details = mapOf(
-                    "ageMinutes" to ((now - maxOf(lastSuccess, lastFailure)) / 60_000L),
-                ),
+                details = mapOf("ageMinutes" to ((now - lastAttempt) / 60_000L)),
             )
             return
         }
+        preferences.edit().putLong(KEY_LAST_UPDATE_ATTEMPT, now).apply()
         DiagnosticLogger.info("YT_DLP_UPDATE", "stable_update_started")
         runCatching {
             YoutubeDL.getInstance().updateYoutubeDL(
@@ -682,17 +663,12 @@ class YtDlpMediaParser(
                 YoutubeDL.UpdateChannel.STABLE,
             )
         }.onSuccess { result ->
-            preferences.edit()
-                .putLong(KEY_LAST_UPDATE_ATTEMPT, now)
-                .putLong(KEY_LAST_UPDATE_FAILURE, 0L)
-                .apply()
             DiagnosticLogger.info(
                 category = "YT_DLP_UPDATE",
                 event = "stable_update_finished",
                 details = mapOf("result" to result),
             )
         }.onFailure { failure ->
-            preferences.edit().putLong(KEY_LAST_UPDATE_FAILURE, now).apply()
             DiagnosticLogger.warning(
                 category = "YT_DLP_UPDATE",
                 event = "stable_update_failed_using_bundled_version",
@@ -738,7 +714,7 @@ class YtDlpMediaParser(
         val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp", "avif")
         const val UPDATE_PREFERENCES = "yt_dlp_updates"
         const val KEY_LAST_UPDATE_ATTEMPT = "last_stable_update_attempt"
-        const val KEY_LAST_UPDATE_FAILURE = "last_stable_update_failure"
+        const val UPDATE_INTERVAL_MS = 24L * 60L * 60L * 1_000L
         val SUPPORTED_HOSTS = setOf(
             "youtube.com", "youtube-nocookie.com", "youtu.be", "instagram.com", "instagr.am",
             "facebook.com", "fb.watch", "fb.com", "vimeo.com", "tiktok.com", "douyin.com",
@@ -770,28 +746,7 @@ internal object YtDlpBotCheckPolicy {
         return markers.any(text::contains)
     }
 
-    fun playerClientRetries(): List<String> = listOf(
-        "tv", "mweb", "web_safari", "android_vr", "ios", "android",
-    )
-}
-
-/**
- * Update throttle: a successful refresh keeps a 24-hour window, but a failed
- * one only backs off for an hour — otherwise a single flaky update pins the
- * bundled (outdated) yt-dlp for a whole day, which is how devices ended up on
- * an extractor that always hits YouTube bot checks.
- */
-internal object YtDlpUpdateThrottle {
-    const val SUCCESS_INTERVAL_MS = 24L * 60L * 60L * 1_000L
-    const val FAILURE_RETRY_INTERVAL_MS = 60L * 60L * 1_000L
-
-    fun shouldSkip(now: Long, lastSuccess: Long, lastFailure: Long): Boolean {
-        val last = maxOf(lastSuccess, lastFailure)
-        if (last <= 0L) return false
-        val interval =
-            if (lastFailure > lastSuccess) FAILURE_RETRY_INTERVAL_MS else SUCCESS_INTERVAL_MS
-        return now - last < interval
-    }
+    fun playerClientRetries(): List<String> = listOf("android", "tv")
 }
 
 internal object YtDlpInternationalFallbackPolicy {
