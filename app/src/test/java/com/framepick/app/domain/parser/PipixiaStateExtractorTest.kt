@@ -6,6 +6,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.net.URLEncoder
 
 /**
  * Fixture structure source: publicly documented Pipixia h5 share-page shape.
@@ -149,5 +150,88 @@ class PipixiaStateExtractorTest {
             html = "<html><body>不是皮皮虾页面</body></html>",
         )
         assertNull(notPipix)
+    }
+
+    @Test
+    fun extractsVideoWorkFromRenderDataHydrationBlob() {
+        // Shape captured from a live share page (h5.pipix.com/s/xxx redirects
+        // to /ppx/item/<id>): SSR hydration lives in <script id="RENDER_DATA">
+        // as percent-encoded JSON with the work payload at ppxItemDetail.item.
+        val itemJson = "{\"ppxItemDetail\":{\"item\":{" +
+            "\"item_id\":7683889964181887267," +
+            "\"content\":{\"text\":\"\"}," +
+            "\"author\":{\"name\":\"皮皮视频.站\"}," +
+            "\"video\":{" +
+            "\"video_download\":{\"width\":640,\"height\":368,\"url_list\":[" +
+            "{\"url\":\"https://v6-cdn-tos.ppxvod.com/a/video.mp4\",\"expires\":1789184992}," +
+            "{\"url\":\"https://v26-cdn-tos.ppxvod.com/b/video.mp4\",\"expires\":1789184992}" +
+            "]}," +
+            "\"video_high\":null," +
+            "\"cover_image\":{\"url_list\":[{\"url\":\"https://p3-ppx-sign.byteimg.com/cover.jpeg\"}]}" +
+            "}," +
+            "\"cover\":{\"url_list\":[{\"url\":\"https://p9-ppx-sign.byteimg.com/cover-q60.jpeg\"}]}," +
+            "\"aha_image\":[{" +
+            "\"width\":200,\"height\":200,\"url_list\":[{\"url\":\"https://p9-ppx.byteimg.com/sticker.jpeg\"}]" +
+            "}]" +
+            "}},\"seoTDK\":{\"title\":\"皮这一下很开心 - 皮皮虾\"}," +
+            "\"ppxCellComment\":{\"cell_comments\":[]}}"
+        // ByteDance SSR percent-encodes with encodeURIComponent semantics
+        // (spaces become %20, a literal `+` never appears), so emulate that
+        // instead of URLEncoder's form-encoding plus-for-space.
+        val encoded = URLEncoder.encode(itemJson, "UTF-8").replace("+", "%20")
+        val html = "<html><head><title>皮这一下很开心 - 皮皮虾</title></head><body>" +
+            "<script id=\"RENDER_DATA\" type=\"application/json\">$encoded</script></body></html>"
+
+        val result = PipixiaStateExtractor.extract(
+            sourceUrl = "https://h5.pipix.com/s/Y0HczQahyuU/",
+            finalUrl = "https://h5.pipix.com/ppx/item/7683889964181887267",
+            html = html,
+        )
+
+        requireNotNull(result)
+        assertEquals("皮这一下很开心", result.title)
+        assertEquals("皮皮视频.站", result.author)
+        val videos = result.items.filter { it.type == MediaType.VIDEO }
+        assertEquals(1, videos.size)
+        assertEquals("https://v6-cdn-tos.ppxvod.com/a/video.mp4", videos[0].mediaUrl)
+        assertEquals("https://v26-cdn-tos.ppxvod.com/b/video.mp4", videos[0].backupUrl)
+        assertEquals(640, videos[0].width)
+        assertEquals(368, videos[0].height)
+        assertTrue(videos[0].isRecommended)
+        // 200×200 stickers must not leak in; only the video plus its cover remain.
+        assertEquals(2, result.items.size)
+        assertEquals(MediaType.COVER, result.items[1].type)
+        assertEquals("https://p3-ppx-sign.byteimg.com/cover.jpeg", result.items[1].mediaUrl)
+        assertEquals("https://p3-ppx-sign.byteimg.com/cover.jpeg", result.thumbnailUrl)
+    }
+
+    @Test
+    fun extractsImageWorkFromRenderDataAhaImages() {
+        val itemJson = "{\"ppxItemDetail\":{\"item\":{" +
+            "\"item_id\":111," +
+            "\"author\":{\"name\":\"图集作者\"}," +
+            "\"aha_image\":[" +
+            "{\"width\":1080,\"height\":1440,\"url_list\":[{\"url\":\"https://p9-ppx.byteimg.com/photo1.jpeg\"}]}," +
+            "{\"width\":200,\"height\":200,\"url_list\":[{\"url\":\"https://p9-ppx.byteimg.com/sticker.jpeg\"}]}," +
+            "{\"width\":1080,\"height\":810,\"url_list\":[{\"url\":\"https://p9-ppx.byteimg.com/photo2.jpeg\"}]}" +
+            "]}}}"
+        val encoded = URLEncoder.encode(itemJson, "UTF-8")
+        val html = "<html><body>" +
+            "<script id=\"RENDER_DATA\" type=\"application/json\">$encoded</script></body></html>"
+
+        val result = PipixiaStateExtractor.extract(
+            sourceUrl = "https://h5.pipix.com/s/img2/",
+            finalUrl = "https://h5.pipix.com/ppx/item/111",
+            html = html,
+        )
+
+        requireNotNull(result)
+        assertEquals("图集作者", result.author)
+        // Tiny stickers are filtered; the two real photos remain.
+        assertEquals(2, result.items.size)
+        result.items.forEach { assertEquals(MediaType.IMAGE, it.type) }
+        assertEquals("https://p9-ppx.byteimg.com/photo1.jpeg", result.items[0].mediaUrl)
+        assertEquals("https://p9-ppx.byteimg.com/photo2.jpeg", result.items[1].mediaUrl)
+        assertTrue(result.items[0].isRecommended)
     }
 }

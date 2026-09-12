@@ -10,6 +10,8 @@ import com.framepick.app.util.PublicUrlNormalizer
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import java.io.IOException
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
 import java.util.Locale
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
@@ -18,7 +20,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.Jsoup
 
-/** Reads the public `__INITIAL_STATE__` embedded in a Pipixia share page. */
+/** Reads the work payload embedded in a Pipixia share page. */
 class PipixiaStructuredMediaParser(
     private val client: OkHttpClient,
 ) : MediaParser {
@@ -102,10 +104,13 @@ class PipixiaStructuredMediaParser(
 }
 
 /**
- * Reads the public `__INITIAL_STATE__` embedded in a Pipixia share page.
+ * Reads the work payload embedded in a Pipixia share page.
  *
- * Structure source: publicly documented Pipixia h5 share-page shape (sandbox
- * capture was blocked by platform risk control; see Phase 1 design D5).
+ * Two containers are supported, tried in order:
+ * 1. `<script id="RENDER_DATA" type="application/json">` — the current SSR
+ *    hydration blob: percent-encoded JSON with the payload at
+ *    `ppxItemDetail.item` (verified against a live share page 2025-09).
+ * 2. Legacy `window.__INITIAL_STATE__ = {...}` used by older builds.
  */
 internal object PipixiaStateExtractor {
     private val mapper = ObjectMapper()
@@ -115,36 +120,32 @@ internal object PipixiaStateExtractor {
     fun extract(sourceUrl: String, finalUrl: String, html: String): ParsedMedia? {
         if (!PipixUrlDetector.isPipix(finalUrl)) return null
         val document = Jsoup.parse(html, finalUrl)
-        val script = document.select("script").asSequence()
-            .map { it.data().ifBlank { it.html() } }
-            .firstOrNull { stateAssignment.containsMatchIn(it) }
-            ?: return null
-        val assignment = stateAssignment.find(script) ?: return null
-        val json = script.substring(assignment.range.last + 1).trim().removeSuffix(";")
-        val root = runCatching { mapper.readTree(json) }.getOrNull() ?: return null
-        // Pipixia wraps the work payload under `item.data` today, but the exact
-        // intermediate key names are not part of a stable contract. Locate the
-        // work node by structure, the same defense used for Kuaishou INIT_STATE.
+        val root = initialStateRoot(document) ?: renderDataRoot(document) ?: return null
+        // The payload sits at `ppxItemDetail.item` in RENDER_DATA and under
+        // `item.data` in the legacy state, but the exact wrapper keys are not
+        // part of a stable contract. Locate the work node by structure first.
         val item = locateWorkNode(root) ?: return null
 
         val itemId = item.path("id").asText().ifBlank {
             item.path("item_id").asText().ifBlank { sourceUrl.hashCode().toString() }
         }
-        val title = item.path("content").path("text").asText().trim().ifBlank {
-            item.path("content").path("title").asText().trim()
-        }.ifBlank { null }
+        val title = item.titleCandidate(root)
         val author = item.path("author").path("user").path("name").asText().trim().ifBlank {
             item.path("author").path("name").asText().trim()
         }.ifBlank { null }
         val coverUrl = item.publicCoverUrl()
 
         val videos = item.videoCandidates()
-        val images = item.publicImageUrls()
+        // RENDER_DATA video posts also carry `aha_image` stickers (200×200
+        // emoji/memes) which are not user content; only read images when the
+        // work has no video of its own.
+        val images = if (videos.isEmpty()) item.publicImageUrls() else emptyList()
         val videoItems = videos.mapIndexed { index, candidate ->
             MediaItem(
                 id = stableId("pipix:$itemId:video:${candidate.url}"),
                 type = MediaType.VIDEO,
                 mediaUrl = candidate.url,
+                backupUrl = candidate.backupUrl,
                 format = "mp4",
                 width = candidate.width,
                 height = candidate.height,
@@ -208,6 +209,7 @@ internal object PipixiaStateExtractor {
     /** Finds the work payload by structure instead of trusting wrapper key names. */
     private fun locateWorkNode(root: JsonNode): JsonNode? {
         val direct = sequenceOf(
+            root.path("ppxItemDetail").path("item"),
             root.path("item").path("data"),
             root.path("item"),
         ).filter { it.isObject }
@@ -226,21 +228,57 @@ internal object PipixiaStateExtractor {
         return null
     }
 
+    /** Legacy state script: `window.__INITIAL_STATE__ = {...};` */
+    private fun initialStateRoot(document: org.jsoup.nodes.Document): JsonNode? {
+        val script = document.select("script").asSequence()
+            .map { it.data().ifBlank { it.html() } }
+            .firstOrNull { stateAssignment.containsMatchIn(it) } ?: return null
+        val assignment = stateAssignment.find(script) ?: return null
+        val json = script.substring(assignment.range.last + 1).trim().removeSuffix(";")
+        return runCatching { mapper.readTree(json) }.getOrNull()
+    }
+
+    /** Current SSR hydration: percent-encoded JSON inside `script#RENDER_DATA`. */
+    private fun renderDataRoot(document: org.jsoup.nodes.Document): JsonNode? {
+        val script = document.selectFirst("script#RENDER_DATA") ?: return null
+        val payload = script.data().ifBlank { script.html() }.trim()
+        if (payload.isEmpty()) return null
+        // ByteDance SSR decodes with decodeURIComponent semantics: a literal
+        // `+` must stay a plus, never become a space.
+        val decoded = runCatching {
+            URLDecoder.decode(payload.replace("+", "%2B"), StandardCharsets.UTF_8)
+        }.getOrNull() ?: return null
+        return runCatching { mapper.readTree(decoded) }.getOrNull()
+    }
+
     /** A work node exposes a media list plus at least one descriptive field. */
     private fun JsonNode.looksLikeWork(): Boolean {
         val hasMedia = (path("medias").isArray && path("medias").size() > 0) ||
             (path("images").isArray && path("images").size() > 0) ||
+            (path("aha_image").isArray && path("aha_image").size() > 0) ||
             (path("video").isObject && path("video").hasPlayableUrl())
         val hasDescription = path("content").isObject ||
             path("author").isObject ||
-            path("cover_image").isObject
+            path("cover_image").isObject ||
+            path("cover").isObject
         return hasMedia && hasDescription
     }
 
-    private fun JsonNode.hasPlayableUrl(): Boolean = videoUrlLists().any() ||
-        path("url_list").size() > 0
+    private fun JsonNode.hasPlayableUrl(): Boolean = legacyVideoUrlLists().any() ||
+        path("url_list").size() > 0 ||
+        videoVariants().any()
 
-    private fun JsonNode.videoUrlLists(): Sequence<JsonNode> = sequenceOf(
+    private fun JsonNode.videoVariants(): Sequence<JsonNode> = sequenceOf(
+        "video_download",
+        "video_high",
+        "video_mid",
+        "video_low",
+        "video_fallback",
+    ).asSequence()
+        .map { path(it) }
+        .filter { it.isObject && it.path("url_list").size() > 0 }
+
+    private fun JsonNode.legacyVideoUrlLists(): Sequence<JsonNode> = sequenceOf(
         "video_high_url_list",
         "video_low_url_list",
         "video_fallback_url_list",
@@ -248,36 +286,55 @@ internal object PipixiaStateExtractor {
 
     private data class VideoCandidate(
         val url: String,
+        val backupUrl: String?,
         val width: Int?,
         val height: Int?,
     )
 
     private fun JsonNode.videoCandidates(): List<VideoCandidate> {
+        // RENDER_DATA shape: quality variants each carrying `url_list` of
+        // `{url, expires}` entries; mirrors within one variant act as backups.
+        val fromVariants = path("video").videoVariants().mapNotNull { variant ->
+            val urls = variant.path("url_list").asSequence()
+                .mapNotNull { entry -> entry.publicUrlFrom("url") ?: entry.asText().toPublicUrl() }
+                .distinct()
+                .toList()
+            if (urls.isEmpty()) {
+                return@mapNotNull null
+            }
+            VideoCandidate(
+                url = urls.first(),
+                backupUrl = urls.getOrNull(1),
+                width = variant.positiveInt("width"),
+                height = variant.positiveInt("height"),
+            )
+        }
         val fromMedias = path("medias").asSequence().mapNotNull { media ->
             val url = media.publicUrlFrom("content_url")
                 ?: media.publicUrlFrom("url")
                 ?: return@mapNotNull null
             VideoCandidate(
                 url = url,
+                backupUrl = null,
                 width = media.positiveInt("width"),
                 height = media.positiveInt("height"),
             )
         }
-        val fromVideo = path("video").run {
-            videoUrlLists().mapNotNull { entry ->
+        val fromLegacyLists = path("video").run {
+            legacyVideoUrlLists().mapNotNull { entry ->
                 val url = entry.publicUrlFrom("url")
                     ?: entry.publicUrlFrom("main_url")
                     ?: entry.asText().toPublicUrl()
                     ?: return@mapNotNull null
-                VideoCandidate(url = url, width = null, height = null)
+                VideoCandidate(url = url, backupUrl = null, width = null, height = null)
             } + path("url_list").asSequence().mapNotNull { entry ->
                 val url = entry.publicUrlFrom("url")
                     ?: entry.asText().toPublicUrl()
                     ?: return@mapNotNull null
-                VideoCandidate(url = url, width = null, height = null)
+                VideoCandidate(url = url, backupUrl = null, width = null, height = null)
             }
         }
-        return (fromMedias + fromVideo)
+        return (fromVariants + fromMedias + fromLegacyLists)
             .distinctBy(VideoCandidate::url)
             .sortedWith(
                 compareByDescending<VideoCandidate> {
@@ -287,16 +344,46 @@ internal object PipixiaStateExtractor {
             .toList()
     }
 
-    private fun JsonNode.publicImageUrls(): List<String> =
-        path("images").asSequence().mapNotNull { image ->
+    private fun JsonNode.titleCandidate(root: JsonNode): String? {
+        val fromContent = itemTitleCandidate()
+        if (!fromContent.isNullOrBlank()) return fromContent
+        val fromSeo = root.path("seoTDK").path("title").asText().trim()
+            .removeSuffix(" - 皮皮虾").trim()
+        if (fromSeo.isNotBlank()) return fromSeo
+        val fromShare = path("share").path("content").asText().trim()
+        if (fromShare.isNotBlank()) return fromShare.removePrefix("[皮皮虾] ").trim()
+        return null
+    }
+
+    private fun JsonNode.itemTitleCandidate(): String? =
+        path("content").path("text").asText().trim().ifBlank {
+            path("content").path("title").asText().trim()
+        }.ifBlank { null }
+
+    private fun JsonNode.publicImageUrls(): List<String> {
+        val fromImages = path("images").asSequence().mapNotNull { image ->
             image.path("image_url").publicUrlFrom("url_list")
                 ?: image.path("image_url").publicUrlFrom("url")
                 ?: image.publicUrlFrom("url")
                 ?: image.path("url").firstPublicUrl()
         }.distinct().toList()
+        if (fromImages.isNotEmpty()) return fromImages
+        // RENDER_DATA image posts carry photos in `aha_image`; the same array
+        // holds 200×200 stickers on video posts (those never reach here), and
+        // tiny stickers on image posts are filtered by width.
+        return path("aha_image").asSequence()
+            .filter { image -> (image.positiveInt("width") ?: Int.MAX_VALUE) >= 320 }
+            .mapNotNull { image ->
+                image.publicUrlFrom("url_list") ?: image.publicUrlFrom("url")
+            }.distinct().toList()
+    }
 
     private fun JsonNode.publicCoverUrl(): String? =
-        path("cover_image").publicUrlFrom("url_list")
+        path("video").path("cover_image").publicUrlFrom("url_list")
+            ?: path("video").path("cover_image").publicUrlFrom("url")
+            ?: path("cover").publicUrlFrom("url_list")
+            ?: path("cover").publicUrlFrom("url")
+            ?: path("cover_image").publicUrlFrom("url_list")
             ?: path("cover_image").publicUrlFrom("url")
             ?: path("cover_image_url").asText().toPublicUrl()
 
