@@ -14,6 +14,7 @@ import com.framepick.app.domain.parser.ParserMessages
 import com.framepick.app.util.DiagnosticLogger
 import com.framepick.app.util.PlatformRecognizer
 import com.framepick.app.util.UrlExtractor
+import java.util.Locale
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -164,7 +165,7 @@ class ExtractorViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun download(item: MediaItem) {
+    fun download(item: MediaItem, index: Int = 0, total: Int = 1) {
         val media = _uiState.value.parsedMedia ?: return
         DiagnosticLogger.info(
             category = "EXTRACTOR_UI",
@@ -177,7 +178,10 @@ class ExtractorViewModel(application: Application) : AndroidViewModel(applicatio
             ),
         )
         viewModelScope.launch {
-            runCatching { downloadRepository.enqueue(item, media.title) }
+            runCatching {
+                val nameTag = if (total > 1) String.format(Locale.US, "%02d", index + 1) else null
+                downloadRepository.enqueue(item, media.title, nameTag)
+            }
                 .onFailure { failure ->
                     Log.e(TAG, "Unable to enqueue download", failure)
                     _uiState.update {

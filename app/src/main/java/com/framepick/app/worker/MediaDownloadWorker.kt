@@ -158,7 +158,8 @@ class MediaDownloadWorker(
         } catch (cause: Throwable) {
             createdOutput?.delete()
             val message = friendlyError(cause, sourceUrl)
-            if (isRetryable(cause) && runAttemptCount < 2) {
+            val maxAttempts = if (cause is TransientServerException) 4 else 2
+            if (isRetryable(cause) && runAttemptCount < maxAttempts) {
                 DiagnosticLogger.warning(
                     category = "DOWNLOAD",
                     event = "worker_retry_scheduled",
@@ -279,6 +280,7 @@ class MediaDownloadWorker(
                 ),
             )
             if (it.code == 401 || it.code == 403) throw DirectForbiddenException()
+            if (it.code == 429 || it.code >= 500) throw TransientServerException(it.code)
             if (!it.isSuccessful) {
                 throw DownloadException("下载失败，服务器返回状态 ${it.code}。")
             }
@@ -353,6 +355,7 @@ class MediaDownloadWorker(
                     ),
                 )
                 if (it.code == 401 || it.code == 403) throw accessRestricted()
+                if (it.code == 429 || it.code >= 500) throw TransientServerException(it.code)
                 if (!it.isSuccessful) {
                     throw DownloadException("音频来源下载失败，服务器返回状态 ${it.code}。")
                 }
@@ -938,6 +941,8 @@ class MediaDownloadWorker(
             .accessRestrictionMessage(sourceUrl, text)
         return when {
             cause is DownloadException -> text
+            cause is TransientServerException ->
+                "下载失败，服务器暂时繁忙（状态码 ${cause.statusCode}），请稍后重试。"
             internationalMessage != null -> internationalMessage
             listOf("login", "sign in", "cookie", "private", "403", "forbidden")
                 .any(lowered::contains) -> accessRestricted().message.orEmpty()
@@ -978,9 +983,10 @@ class MediaDownloadWorker(
         val base = title?.trim()?.takeIf(String::isNotBlank) ?: "media_${itemId.take(8)}"
         val safe = base.replace(Regex("[\\\\/:*?\"<>|\\p{Cntrl}]"), "_")
             .trim('.', ' ')
-            .take(80)
+            .take(70)
             .ifBlank { "media_${System.currentTimeMillis()}" }
-        return "$safe.$extension"
+        val tag = inputData.getString(KEY_NAME_TAG)?.trim()?.takeIf(String::isNotBlank)
+        return if (tag != null) "${safe}_$tag.$extension" else "$safe.$extension"
     }
 
     private fun uniqueFile(directory: File, displayName: String): File {
@@ -1009,10 +1015,14 @@ class MediaDownloadWorker(
 
     private class DownloadException(message: String) : IOException(message)
 
+    private class TransientServerException(val statusCode: Int) :
+        IOException("server returned status ${statusCode}")
+
     private class DirectForbiddenException : IOException("CDN direct link returned 401/403")
 
     companion object {
         const val KEY_MEDIA_URL = "media_url"
+        const val KEY_NAME_TAG = "name_tag"
         const val KEY_SOURCE_URL = "source_url"
         const val KEY_BACKUP_URL = "backup_url"
         const val KEY_DOWNLOAD_STRATEGY = "download_strategy"

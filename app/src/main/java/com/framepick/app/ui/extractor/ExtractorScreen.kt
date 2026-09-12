@@ -109,7 +109,9 @@ fun ExtractorScreen(
         ActivityResultContracts.RequestPermission(),
     ) {
         // Notifications are optional; denying them must not block the actual WorkManager task.
-        pendingDownloads.forEach(viewModel::download)
+        pendingDownloads.forEachIndexed { index, item ->
+            viewModel.download(item, index, pendingDownloads.size)
+        }
         pendingDownloads = emptyList()
     }
     val requestDownloads: (List<MediaItem>) -> Unit = { items ->
@@ -122,7 +124,9 @@ fun ExtractorScreen(
                 pendingDownloads = downloadable
                 notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
             } else {
-                downloadable.forEach(viewModel::download)
+                downloadable.forEachIndexed { index, item ->
+                    viewModel.download(item, index, downloadable.size)
+                }
             }
         }
     }

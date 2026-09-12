@@ -30,7 +30,7 @@ data class DownloadTask(
 
 interface DownloadRepository {
     fun observeDownloads(): Flow<List<DownloadTask>>
-    suspend fun enqueue(item: MediaItem, title: String?): UUID
+    suspend fun enqueue(item: MediaItem, title: String?, nameTag: String? = null): UUID
     fun cancel(workId: UUID)
     fun pruneFinished()
 }
@@ -58,7 +58,7 @@ class WorkManagerDownloadRepository(
             }
         }
 
-    override suspend fun enqueue(item: MediaItem, title: String?): UUID {
+    override suspend fun enqueue(item: MediaItem, title: String?, nameTag: String?): UUID {
         DiagnosticLogger.info(
             category = "DOWNLOAD",
             event = "enqueue_requested",
@@ -92,6 +92,7 @@ class WorkManagerDownloadRepository(
             .putString(MediaDownloadWorker.KEY_FORMAT, item.format)
             .putString(MediaDownloadWorker.KEY_TITLE, displayTitle)
             .putString(MediaDownloadWorker.KEY_ITEM_ID, item.id)
+            .putString(MediaDownloadWorker.KEY_NAME_TAG, nameTag)
             .putLong(MediaDownloadWorker.KEY_EXPECTED_SIZE, item.fileSize ?: -1L)
             .putLong(MediaDownloadWorker.KEY_HISTORY_ID, historyId)
             .build()
