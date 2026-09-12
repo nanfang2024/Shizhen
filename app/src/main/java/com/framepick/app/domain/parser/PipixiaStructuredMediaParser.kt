@@ -10,7 +10,6 @@ import com.framepick.app.util.PublicUrlNormalizer
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import java.io.IOException
-import java.net.URLDecoder
 import java.util.Locale
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
@@ -460,7 +459,7 @@ internal object PpxvodUrlScanner {
         val variants = sequenceOf(
             html,
             html.replace("\\/", "/"),
-            runCatching { URLDecoder.decode(html, Charsets.UTF_8) }.getOrNull().orEmpty(),
+            LenientPercentDecoder.decode(html),
         ).filter(String::isNotEmpty).distinct()
         return variants.flatMap { text -> urlPattern.findAll(text).map { it.value } }
             .map(::cleanup)
@@ -486,11 +485,7 @@ internal object PpxvodUrlScanner {
             .replace("\\\"", "")
             .replace("\\u002F", "/")
             .replace("\\u0026", "&")
-        return if ('%' in unescaped) {
-            runCatching { URLDecoder.decode(unescaped, Charsets.UTF_8) }.getOrDefault(unescaped)
-        } else {
-            unescaped
-        }
+        return if ('%' in unescaped) LenientPercentDecoder.decode(unescaped) else unescaped
     }
 
     private fun tierOf(url: String): Tier = when {
@@ -499,6 +494,47 @@ internal object PpxvodUrlScanner {
         "lr=superb" in url -> Tier.WATERMARKED
         else -> Tier.UNKNOWN
     }
+}
+
+/**
+ * Python `unquote`-style percent decoding: `%XY` is decoded only when both
+ * following characters are hex digits, otherwise the `%` stays untouched, and
+ * `+` is never treated as a space. `java.net.URLDecoder` throws on real h5
+ * pages (CSS values like `rgba(...) -5.1%, rgba(...)`) and would also corrupt
+ * signed URLs containing literal `+`, which silently emptied the decoded scan
+ * variant on device.
+ */
+internal object LenientPercentDecoder {
+    fun decode(text: String): String {
+        val bytes = ByteArray(text.length)
+        val decoded = StringBuilder(text.length)
+        var buffered = 0
+        var index = 0
+        var inEscapeRun = false
+        while (index < text.length) {
+            val char = text[index]
+            if (char == '%' && index + 2 < text.length &&
+                text[index + 1].isHexDigit() && text[index + 2].isHexDigit()
+            ) {
+                bytes[buffered++] = text.substring(index + 1, index + 3).toInt(16).toByte()
+                index += 3
+                inEscapeRun = true
+                continue
+            }
+            if (inEscapeRun) {
+                decoded.append(String(bytes, 0, buffered, Charsets.UTF_8))
+                buffered = 0
+                inEscapeRun = false
+            }
+            decoded.append(char)
+            index++
+        }
+        if (inEscapeRun) decoded.append(String(bytes, 0, buffered, Charsets.UTF_8))
+        return decoded.toString()
+    }
+
+    private fun Char.isHexDigit(): Boolean =
+        this in '0'..'9' || this in 'a'..'f' || this in 'A'..'F'
 }
 
 /** Builds ParsedMedia from the ppxvod direct links found on the item page. */
